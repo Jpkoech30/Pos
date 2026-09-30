@@ -9,6 +9,9 @@ import SaleScreen from '../screens/SaleScreen';
 import CheckoutScreen from '../screens/CheckoutScreen';
 import ScannerScreen from '../screens/ScannerScreen';
 import ReceiptScreen from '../screens/ReceiptScreen';
+import MpesaPaymentScreen from '../screens/MpesaPaymentScreen';
+import CashPaymentScreen from '../screens/CashPaymentScreen';
+import StkPushScreen from '../screens/StkPushScreen';
 
 import ProductsScreen from '../screens/ProductsScreen';
 import ProductDetailScreen from '../screens/ProductDetailScreen';
@@ -34,6 +37,9 @@ function SaleStackNavigator() {
       <SaleStack.Screen name="SaleHome" component={SaleScreen} options={{ headerShown: false }} />
       <SaleStack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Checkout' }} />
       <SaleStack.Screen name="Scanner" component={ScannerScreen} options={{ headerShown: false }} />
+      <SaleStack.Screen name="MpesaPayment" component={MpesaPaymentScreen} options={{ headerShown: false }} />
+      <SaleStack.Screen name="CashPayment" component={CashPaymentScreen} options={{ headerShown: false }} />
+      <SaleStack.Screen name="StkPush" component={StkPushScreen} options={{ headerShown: false }} />
       <SaleStack.Screen name="Receipt" component={ReceiptScreen} options={{ headerShown: false, gestureEnabled: false }} />
     </SaleStack.Navigator>
   );
@@ -97,7 +103,13 @@ export default function AppStack() {
         component={SaleStackNavigator}
         options={({ route }) => {
           const routeName = getFocusedRouteNameFromRoute(route) ?? 'SaleHome';
-          if (routeName === 'Scanner' || routeName === 'Receipt') {
+          if (
+            routeName === 'Scanner' ||
+            routeName === 'Receipt' ||
+            routeName === 'MpesaPayment' ||
+            routeName === 'CashPayment' ||
+            routeName === 'StkPush'
+          ) {
             return { tabBarStyle: { display: 'none' } };
           }
           return {

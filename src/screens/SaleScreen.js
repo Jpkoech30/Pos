@@ -10,6 +10,7 @@ import { productsApi } from '../services/products';
 import { useCart } from '../context/CartContext';
 import ProductTile from '../components/ProductTile';
 import CartSheet from '../components/CartSheet';
+import PaymentSheet from '../components/PaymentSheet';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { formatKES } from '../utils/currency';
 
@@ -22,6 +23,7 @@ export default function SaleScreen() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(ALL);
   const [cartOpen, setCartOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -64,6 +66,15 @@ export default function SaleScreen() {
   const handleAdd = (product) => {
     cart.add(product);
     Keyboard.dismiss();
+  };
+
+  const handleSelectPayment = (method) => {
+    setPaymentOpen(false);
+    Toast.show({
+      type: 'info',
+      text1: `${method.toUpperCase()} flow`,
+      text2: 'Coming next',
+    });
   };
 
   if (loading) {
@@ -177,8 +188,15 @@ export default function SaleScreen() {
         onClose={() => setCartOpen(false)}
         onCheckout={() => {
           setCartOpen(false);
-          Toast.show({ type: 'info', text1: 'Payment sheet', text2: 'Coming next' });
+          setPaymentOpen(true);
         }}
+      />
+
+      {/* PAYMENT SHEET */}
+      <PaymentSheet
+        visible={paymentOpen}
+        onClose={() => setPaymentOpen(false)}
+        onSelect={handleSelectPayment}
       />
     </SafeAreaView>
   );

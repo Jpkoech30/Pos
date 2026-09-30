@@ -1,13 +1,17 @@
 {
   "expo": {
-    "name": "banking",
-    "slug": "banking",
+    "name": "DukaPOS",
+    "slug": "dukapos",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to scan product barcodes"
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -15,13 +19,22 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": ["CAMERA"]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to scan product barcodes",
+          "barcodeScannerEnabled": true,
+          "microphonePermission": false
+        }
+      ]
     ]
   }
 }

@@ -5,10 +5,15 @@ export const productsApi = {
 
   get: (id) => api.get(`/products/${id}`).then((r) => r.data),
 
-  create: (data) => api.post('/products', data).then((r) => r.data),
+  lookup: (barcode) =>
+    api.get(`/products/lookup/${barcode}`).then((r) => r.data),
 
-  update: (id, data) =>
-    api.patch(`/products/${id}`, data).then((r) => r.data),
+  create: (payload) =>
+    api.post('/products', payload).then((r) => r.data),
 
-  remove: (id) => api.delete(`/products/${id}`).then((r) => r.data),
+  update: (id, payload) =>
+    api.patch(`/products/${id}`, payload).then((r) => r.data),
+
+  remove: (id) =>
+    api.delete(`/products/${id}`).then((r) => r.data),
 };

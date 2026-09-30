@@ -1,13 +1,20 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
-  View, Text, TextInput, FlatList, ScrollView, StyleSheet,
-  ActivityIndicator, RefreshControl, TouchableOpacity,
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  RefreshControl,
+  TextInput,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { Screen, Card } from '../components/ui';
+
 import { productsApi } from '../services/products';
-import { colors, spacing, typography, radii } from '../theme';
+import { colors, spacing, typography, radii, shadows } from '../theme';
 
 const CATEGORY_META = {
   Coffee:    { icon: 'cafe-outline',       color: '#92400e', bg: '#fef3c7' },
@@ -22,11 +29,10 @@ export default function ProductsScreen({ navigation }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
   const [error, setError] = useState(null);
-  const [query, setQuery] = useState('');
-  const [category, setCategory] = useState('All');
 
-  const loadProducts = useCallback(async (isRefresh = false) => {
+  const load = useCallback(async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
       setError(null);
@@ -43,275 +49,244 @@ export default function ProductsScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+  // Initial load
+  useEffect(() => { load(); }, [load]);
 
-  // reload on focus (after add/edit)
+  // Reload when returning to this screen (after create/edit/delete)
   useEffect(() => {
-    const unsub = navigation.addListener('focus', () => loadProducts());
+    const unsub = navigation.addListener('focus', () => load(true));
     return unsub;
-  }, [navigation, loadProducts]);
+  }, [navigation, load]);
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadProducts(true);
+    load(true);
   };
 
-  const categories = useMemo(() => {
-    const set = new Set(products.map((p) => p.category));
-    return ['All', ...Array.from(set).sort()];
-  }, [products]);
+  const filtered = search.trim()
+    ? products.filter((p) => {
+        const q = search.toLowerCase();
+        return (
+          p.name.toLowerCase().includes(q) ||
+          (p.category || '').toLowerCase().includes(q) ||
+          (p.sku || '').toLowerCase().includes(q) ||
+          (p.barcode || '').includes(q)
+        );
+      })
+    : products;
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products.filter((p) => {
-      const matchesCategory = category === 'All' || p.category === category;
-      if (!matchesCategory) return false;
-      if (!q) return true;
-      return (
-        p.name.toLowerCase().includes(q) ||
-        (p.sku && p.sku.toLowerCase().includes(q))
-      );
-    });
-  }, [products, query, category]);
-
-  if (loading) {
+  if (loading && products.length === 0) {
     return (
-      <Screen>
+      <SafeAreaView style={styles.root} edges={['top']}>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </Screen>
-    );
-  }
-
-  if (error && products.length === 0) {
-    return (
-      <Screen>
-        <View style={styles.center}>
-          <Ionicons name="cube-outline" size={48} color={colors.textMuted} />
-          <Text style={styles.errorTitle}>Couldn't load products</Text>
-          <Text style={styles.errorMessage}>{error}</Text>
-          <TouchableOpacity style={styles.retry} onPress={() => loadProducts()}>
-            <Text style={styles.retryText}>Try Again</Text>
-          </TouchableOpacity>
-        </View>
-      </Screen>
+      </SafeAreaView>
     );
   }
 
   return (
-    <Screen padded={false}>
+    <SafeAreaView style={styles.root} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Products</Text>
-          <Text style={styles.subtitle}>{filtered.length} of {products.length}</Text>
-        </View>
+        <Text style={styles.title}>Products</Text>
         <TouchableOpacity
+          style={styles.addBtn}
           onPress={() => navigation.navigate('ProductForm')}
-          style={styles.addButton}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
         >
-          <Ionicons name="add" size={24} color="#fff" />
+          <Ionicons name="add" size={22} color="#fff" />
         </TouchableOpacity>
       </View>
 
+      {/* Search */}
       <View style={styles.searchWrap}>
-        <View style={styles.searchBox}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by name or SKU"
-            placeholderTextColor={colors.textMuted}
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {query.length > 0 && (
-            <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <Ionicons name="search" size={18} color={colors.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search name, category, SKU…"
+          placeholderTextColor={colors.textMuted}
+          value={search}
+          onChangeText={setSearch}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')} hitSlop={10}>
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
-      <View style={styles.pillsWrap}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.pillsContent}
-        >
-          {categories.map((cat) => {
-            const active = cat === category;
-            return (
-              <TouchableOpacity
-                key={cat}
-                onPress={() => setCategory(cat)}
-                activeOpacity={0.7}
-                style={[styles.pill, active && styles.pillActive]}
-              >
-                <Text style={[styles.pillText, active && styles.pillTextActive]}>
-                  {cat}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
+      {/* List */}
       <FlatList
         data={filtered}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => (
-          <ProductRow
-            product={item}
-            onPress={() => navigation.navigate('ProductDetail', { product: item })}
-          />
-        )}
-        contentContainerStyle={styles.list}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="search" size={32} color={colors.textMuted} />
+          <View style={styles.emptyBox}>
+            <Ionicons name="cube-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyText}>
-              {query ? `No products match "${query}"` : 'No products in this category'}
+              {search ? 'No products match your search' : 'No products yet'}
             </Text>
+            {!search && (
+              <TouchableOpacity
+                style={styles.emptyBtn}
+                onPress={() => navigation.navigate('ProductForm')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.emptyBtnText}>Add your first product</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
+        renderItem={({ item }) => (
+          <ProductRow
+            product={item}
+            onPress={() => navigation.navigate('ProductDetail', { product: item })}
+          />
+        )}
       />
-    </Screen>
+    </SafeAreaView>
   );
 }
 
 function ProductRow({ product, onPress }) {
-  const stock = Number(product.stock);
-  const stockBadge = getStockBadge(stock);
   const meta = CATEGORY_META[product.category] || CATEGORY_META.Default;
+  const stock = Number(product.stock);
+
+  const stockBadge =
+    stock <= 0
+      ? { text: 'Out', color: colors.danger, bg: colors.dangerSoft }
+      : stock < 10
+      ? { text: `${stock} left`, color: colors.warning, bg: colors.warningSoft }
+      : null;
 
   return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-      <Card style={styles.row}>
-        <View style={[styles.rowIcon, { backgroundColor: meta.bg }]}>
-          <Ionicons name={meta.icon} size={22} color={meta.color} />
-        </View>
+    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
+      <View style={[styles.rowIcon, { backgroundColor: meta.bg }]}>
+        <Ionicons name={meta.icon} size={22} color={meta.color} />
+      </View>
 
-        <View style={styles.rowLeft}>
+      <View style={styles.rowBody}>
+        <Text style={styles.rowName} numberOfLines={1}>
+          {product.name}
+        </Text>
+        <View style={styles.rowMeta}>
           <Text style={styles.rowCategory}>{product.category}</Text>
-          <Text style={styles.rowName} numberOfLines={1}>{product.name}</Text>
-          {product.sku ? (
-            <Text style={styles.rowSku}>SKU: {product.sku}</Text>
-          ) : null}
+          {stockBadge && (
+            <View style={[styles.badge, { backgroundColor: stockBadge.bg }]}>
+              <Text style={[styles.badgeText, { color: stockBadge.color }]}>
+                {stockBadge.text}
+              </Text>
+            </View>
+          )}
         </View>
+      </View>
 
-        <View style={styles.rowRight}>
-          <Text style={styles.rowPrice}>${Number(product.price).toFixed(2)}</Text>
-          <View style={[styles.stockPill, { backgroundColor: stockBadge.bg }]}>
-            <Text style={[styles.stockPillText, { color: stockBadge.fg }]}>
-              {stockBadge.label}
-            </Text>
-          </View>
-        </View>
-      </Card>
+      <Text style={styles.rowPrice}>
+        KSh {Number(product.price).toFixed(0)}
+      </Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
 
-function getStockBadge(stock) {
-  if (stock <= 0) {
-    return { label: 'OUT', bg: colors.dangerSoft, fg: colors.danger };
-  }
-  if (stock < 10) {
-    return { label: `LOW · ${stock}`, bg: colors.warningSoft, fg: colors.warning };
-  }
-  return { label: `${stock} in stock`, bg: colors.surfaceAlt, fg: colors.textMuted };
-}
-
 const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  root: { flex: 1, backgroundColor: colors.background },
+
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.xxl,
+  },
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.screenPadding,
-    paddingTop: spacing.md,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
-  title: { ...typography.h1, color: colors.text },
-  subtitle: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
+  title: {
+    ...typography.h2,
+    color: colors.text,
   },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  addBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   searchWrap: {
-    paddingHorizontal: spacing.screenPadding,
-    paddingBottom: spacing.md,
-  },
-  searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: radii.md,
+    marginHorizontal: spacing.screenPadding,
     paddingHorizontal: spacing.md,
     height: 44,
+    borderRadius: radii.md,
+    marginBottom: spacing.md,
     gap: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
-    paddingVertical: 0,
-  },
-
-  pillsWrap: { paddingBottom: spacing.md },
-  pillsContent: {
-    paddingHorizontal: spacing.screenPadding,
-    gap: spacing.sm,
-  },
-  pill: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.pill,
-    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  pillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  pillText: {
-    ...typography.captionMedium,
-    color: colors.textSecondary,
-  },
-  pillTextActive: {
-    color: colors.textInverse,
-    fontWeight: '600',
+  searchInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.text,
+    padding: 0,
   },
 
-  list: {
+  listContent: {
     paddingHorizontal: spacing.screenPadding,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xxxl,
     flexGrow: 1,
+  },
+
+  emptyBox: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: spacing.xxxl,
+  },
+  emptyText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.md,
+    textAlign: 'center',
+  },
+  emptyBtn: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
+  },
+  emptyBtnText: {
+    ...typography.button,
+    color: colors.textInverse,
   },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
-    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.md,
+    ...shadows.sm,
   },
   rowIcon: {
     width: 44,
@@ -319,68 +294,35 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
   },
-  rowLeft: { flex: 1, marginRight: spacing.md },
-  rowCategory: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
+  rowBody: { flex: 1 },
   rowName: {
-    ...typography.bodyBold,
+    ...typography.bodyMedium,
     color: colors.text,
+    fontWeight: '600',
   },
-  rowSku: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 4,
-  },
-  rowRight: { alignItems: 'flex-end' },
-  rowPrice: {
-    ...typography.h4,
-    color: colors.primary,
-  },
-  stockPill: {
-    marginTop: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radii.pill,
-  },
-  stockPillText: {
-    ...typography.tiny,
-    fontWeight: '700',
-  },
-
-  empty: {
+  rowMeta: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.huge,
+    marginTop: 2,
     gap: spacing.sm,
   },
-  emptyText: {
-    ...typography.body,
+  rowCategory: {
+    ...typography.caption,
     color: colors.textMuted,
-    textAlign: 'center',
   },
-
-  errorTitle: {
-    ...typography.h3,
-    color: colors.text,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  errorMessage: {
-    ...typography.body,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  retry: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xxl,
-    paddingVertical: spacing.md,
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
     borderRadius: radii.sm,
   },
-  retryText: { ...typography.button, color: colors.textInverse },
+  badgeText: {
+    ...typography.tiny,
+    fontWeight: '600',
+  },
+  rowPrice: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    fontWeight: '600',
+  },
 });

@@ -7,11 +7,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { productsApi } from '../services/products';
+import { ordersApi } from '../services/orders';
 import { useCart } from '../context/CartContext';
 import ProductTile from '../components/ProductTile';
 import CartSheet from '../components/CartSheet';
 import PaymentSheet from '../components/PaymentSheet';
 import CashSheet from '../components/CashSheet';
+import MpesaSheet from '../components/MpesaSheet';
+import ReceiptScreen from '../components/ReceiptScreen';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { formatKES } from '../utils/currency';
 
@@ -23,9 +26,17 @@ export default function SaleScreen() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(ALL);
+
+  // Sheets
   const [cartOpen, setCartOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [cashOpen, setCashOpen] = useState(false);
+  const [mpesaOpen, setMpesaOpen] = useState(false);
+
+  // Receipt
+  const [receipt, setReceipt] = useState(null);
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -70,30 +81,71 @@ export default function SaleScreen() {
     Keyboard.dismiss();
   };
 
+  // --- Payment flow ---
+
   const handleSelectPayment = (method) => {
     setPaymentOpen(false);
+    if (method === 'cash') return setCashOpen(true);
+    if (method === 'mpesa') return setMpesaOpen(true);
 
-    if (method === 'cash') {
-      setCashOpen(true);
-      return;
+    Toast.show({ type: 'info', text1: `${method.toUpperCase()} flow`, text2: 'Coming next' });
+  };
+
+  const submitOrder = async ({ method, extras = {} }) => {
+    try {
+      setSubmitting(true);
+
+      const items = cart.items.map((i) => ({
+        productId: i.product.id,
+        name: i.product.name,
+        price: Number(i.product.price),
+        quantity: i.quantity,
+      }));
+
+      const { order } = await ordersApi.create(items, method);
+
+      // Freeze a receipt snapshot before clearing the cart
+      setReceipt({
+        id: order?.id,
+        items,
+        subtotal: order?.subtotal ?? cart.subtotal,
+        total: order?.total ?? cart.total,
+        paymentMethod: method,
+        createdAt: order?.createdAt || new Date().toISOString(),
+        ...extras,
+      });
+
+      // Close all sheets, open receipt
+      setCashOpen(false);
+      setMpesaOpen(false);
+      setReceiptOpen(true);
+
+      // Clear cart immediately — receipt already has its own copy
+      cart.clear();
+
+      // Refresh products in background (stock may have changed)
+      loadProducts();
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'Could not save sale', text2: err.message });
+    } finally {
+      setSubmitting(false);
     }
-
-    Toast.show({
-      type: 'info',
-      text1: `${method.toUpperCase()} flow`,
-      text2: 'Coming next',
-    });
   };
 
-  const handleCashConfirm = ({ method, tendered, change }) => {
-    // TODO: POST /orders — coming in the next file
-    setCashOpen(false);
-    Toast.show({
-      type: 'success',
-      text1: 'Payment recorded',
-      text2: `Change: ${formatKES(change)}`,
-    });
+  const handleCashConfirm = ({ tendered, change }) => {
+    submitOrder({ method: 'cash', extras: { tendered, change } });
   };
+
+  const handleMpesaConfirm = ({ phone }) => {
+    submitOrder({ method: 'mpesa', extras: { phone } });
+  };
+
+  const handleReceiptDone = () => {
+    setReceiptOpen(false);
+    setReceipt(null);
+  };
+
+  // --- Render ---
 
   if (loading) {
     return (
@@ -200,7 +252,7 @@ export default function SaleScreen() {
         </TouchableOpacity>
       )}
 
-      {/* CART SHEET */}
+      {/* SHEETS */}
       <CartSheet
         visible={cartOpen}
         onClose={() => setCartOpen(false)}
@@ -210,18 +262,28 @@ export default function SaleScreen() {
         }}
       />
 
-      {/* PAYMENT SHEET */}
       <PaymentSheet
         visible={paymentOpen}
         onClose={() => setPaymentOpen(false)}
         onSelect={handleSelectPayment}
       />
 
-      {/* CASH SHEET */}
       <CashSheet
         visible={cashOpen}
         onClose={() => setCashOpen(false)}
         onConfirm={handleCashConfirm}
+      />
+
+      <MpesaSheet
+        visible={mpesaOpen}
+        onClose={() => setMpesaOpen(false)}
+        onConfirm={handleMpesaConfirm}
+      />
+
+      <ReceiptScreen
+        visible={receiptOpen}
+        receipt={receipt}
+        onDone={handleReceiptDone}
       />
     </SafeAreaView>
   );

@@ -1,125 +1,291 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  FlatList, ActivityIndicator, Keyboard,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { Screen } from '../components/ui';
-import ProductTile from '../components/ProductTile';
-import CartBar from '../components/CartBar';
 import { productsApi } from '../services/products';
 import { useCart } from '../context/CartContext';
-import { colors, spacing, typography, radii } from '../theme';
+import ProductTile from '../components/ProductTile';
+import { colors, spacing, typography, radii, shadows } from '../theme';
+import { formatKES } from '../utils/currency';
 
-export default function SaleScreen({ navigation }) {
-  const { addItem, itemCount, subtotal } = useCart();
+const ALL = 'All';
+
+export default function SaleScreen() {
+  const cart = useCart();
   const [products, setProducts] = useState([]);
-  const [category, setCategory] = useState('All');
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState(ALL);
 
-  const loadProducts = useCallback(async (isRefresh = false) => {
+  const loadProducts = useCallback(async () => {
     try {
-      if (!isRefresh) setLoading(true);
+      setLoading(true);
       const data = await productsApi.list();
-      setProducts(data.products);
+      setProducts(data.products || []);
     } catch (err) {
       Toast.show({ type: 'error', text1: 'Could not load products', text2: err.message });
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    loadProducts(true);
-  };
+  // Unique categories derived from product list
+  const categories = useMemo(() => {
+    const set = new Set(products.map((p) => p.category).filter(Boolean));
+    return [ALL, ...Array.from(set)];
+  }, [products]);
 
-  const categories = ['All', ...new Set(products.map((p) => p.category))];
-  const visible = category === 'All'
-    ? products
-    : products.filter((p) => p.category === category);
+  // Filtered list based on category + search
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return products.filter((p) => {
+      if (category !== ALL && p.category !== category) return false;
+      if (!q) return true;
+      return (
+        p.name?.toLowerCase().includes(q) ||
+        p.sku?.toLowerCase().includes(q) ||
+        p.barcode?.includes(q)
+      );
+    });
+  }, [products, category, query]);
+
+  // Map product id → quantity in cart, for tile badges
+  const qtyMap = useMemo(() => {
+    const m = {};
+    cart.items.forEach((i) => { m[i.product.id] = i.quantity; });
+    return m;
+  }, [cart.items]);
+
+  const handleAdd = (product) => {
+    cart.add(product);
+    Keyboard.dismiss();
+  };
 
   if (loading) {
     return (
-      <Screen>
+      <SafeAreaView style={styles.root} edges={['top']}>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
-      </Screen>
+      </SafeAreaView>
     );
   }
 
   return (
-    <Screen padded={false}>
+    <SafeAreaView style={styles.root} edges={['top']}>
+      {/* SEARCH */}
+      <View style={styles.searchWrap}>
+        <Ionicons name="search" size={20} color={colors.textMuted} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search products..."
+          placeholderTextColor={colors.textMuted}
+          value={query}
+          onChangeText={setQuery}
+          autoCorrect={false}
+          returnKeyType="search"
+        />
+        {query.length > 0 && (
+          <TouchableOpacity onPress={() => setQuery('')} hitSlop={8}>
+            <Ionicons name="close-circle" size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* CATEGORY CHIPS */}
       <FlatList
-        data={visible}
-        keyExtractor={(item) => item.id}
+        horizontal
+        data={categories}
+        keyExtractor={(c) => c}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.chipsRow}
+        renderItem={({ item }) => {
+          const active = item === category;
+          return (
+            <TouchableOpacity
+              style={[styles.chip, active && styles.chipActive]}
+              onPress={() => setCategory(item)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                {item}
+              </Text>
+            </TouchableOpacity>
+          );
+        }}
+      />
+
+      {/* PRODUCT GRID */}
+      <FlatList
+        data={filtered}
+        keyExtractor={(p) => p.id}
         numColumns={2}
         columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => <ProductTile product={item} onPress={addItem} />}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            <Text style={styles.title}>Register</Text>
-
-            <FlatList
-              data={categories}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(c) => c}
-              contentContainerStyle={styles.chips}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => setCategory(item)}
-                  style={[styles.chip, category === item && styles.chipActive]}
-                >
-                  <Text style={[styles.chipText, category === item && styles.chipTextActive]}>
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              )}
-            />
+        contentContainerStyle={styles.grid}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Ionicons name="cube-outline" size={40} color={colors.textMuted} />
+            <Text style={styles.emptyText}>
+              {query ? 'No products match your search' : 'No products yet'}
+            </Text>
           </View>
         }
+        renderItem={({ item }) => (
+          <ProductTile
+            product={item}
+            quantity={qtyMap[item.id] || 0}
+            onPress={() => handleAdd(item)}
+          />
+        )}
       />
 
-      <CartBar
-        itemCount={itemCount}
-        subtotal={subtotal}
-        onPress={() => navigation.navigate('Cart')}
-      />
-    </Screen>
+      {/* CART BAR */}
+      {cart.itemCount > 0 && (
+        <TouchableOpacity
+          style={styles.cartBar}
+          activeOpacity={0.9}
+          onPress={() => Toast.show({ type: 'info', text1: 'Cart sheet', text2: 'Coming next' })}
+        >
+          <View style={styles.cartLeft}>
+            <View style={styles.cartIconWrap}>
+              <Ionicons name="cart" size={20} color={colors.textInverse} />
+            </View>
+            <View>
+              <Text style={styles.cartCount}>
+                {cart.itemCount} item{cart.itemCount === 1 ? '' : 's'}
+              </Text>
+              <Text style={styles.cartHint}>Tap to review</Text>
+            </View>
+          </View>
+
+          <View style={styles.cartRight}>
+            <Text style={styles.cartTotal}>{formatKES(cart.total)}</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
+          </View>
+        </TouchableOpacity>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  list: { paddingHorizontal: spacing.sm, paddingBottom: 100 },
-  row: { paddingHorizontal: spacing.xs },
 
-  header: {
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
+    height: 48,
+    borderRadius: radii.md,
+    gap: spacing.sm,
+    ...shadows.sm,
   },
-  title: { ...typography.h1, color: colors.text, marginBottom: spacing.lg },
+  searchInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.text,
+    paddingVertical: 0,
+  },
 
-  chips: { paddingVertical: spacing.xs },
+  chipsRow: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
   chip: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
     borderRadius: radii.pill,
-    marginRight: spacing.sm,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    marginRight: spacing.sm,
   },
-  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText: { ...typography.captionMedium, color: colors.textSecondary },
-  chipTextActive: { color: colors.textInverse },
+  chipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipText: {
+    ...typography.captionMedium,
+    color: colors.textSecondary,
+  },
+  chipTextActive: {
+    color: colors.textInverse,
+    fontWeight: '600',
+  },
+
+  grid: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: 120, // leave room for cart bar
+  },
+  row: {
+    justifyContent: 'space-between',
+  },
+
+  empty: {
+    alignItems: 'center',
+    paddingTop: spacing.huge,
+    gap: spacing.md,
+  },
+  emptyText: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
+
+  cartBar: {
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    bottom: spacing.lg,
+    backgroundColor: colors.primary,
+    borderRadius: radii.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shadows.lg,
+  },
+  cartLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  cartIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.overlayLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartCount: {
+    ...typography.bodyBold,
+    color: colors.textInverse,
+  },
+  cartHint: {
+    ...typography.tiny,
+    color: '#c7d2fe',
+    marginTop: 2,
+  },
+  cartRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  cartTotal: {
+    ...typography.h3,
+    color: colors.textInverse,
+  },
 });

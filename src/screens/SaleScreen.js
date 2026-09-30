@@ -9,6 +9,7 @@ import Toast from 'react-native-toast-message';
 import { productsApi } from '../services/products';
 import { useCart } from '../context/CartContext';
 import ProductTile from '../components/ProductTile';
+import CartSheet from '../components/CartSheet';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { formatKES } from '../utils/currency';
 
@@ -20,6 +21,7 @@ export default function SaleScreen() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState(ALL);
+  const [cartOpen, setCartOpen] = useState(false);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -35,13 +37,11 @@ export default function SaleScreen() {
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
 
-  // Unique categories derived from product list
   const categories = useMemo(() => {
     const set = new Set(products.map((p) => p.category).filter(Boolean));
     return [ALL, ...Array.from(set)];
   }, [products]);
 
-  // Filtered list based on category + search
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return products.filter((p) => {
@@ -55,7 +55,6 @@ export default function SaleScreen() {
     });
   }, [products, category, query]);
 
-  // Map product id → quantity in cart, for tile badges
   const qtyMap = useMemo(() => {
     const m = {};
     cart.items.forEach((i) => { m[i.product.id] = i.quantity; });
@@ -151,7 +150,7 @@ export default function SaleScreen() {
         <TouchableOpacity
           style={styles.cartBar}
           activeOpacity={0.9}
-          onPress={() => Toast.show({ type: 'info', text1: 'Cart sheet', text2: 'Coming next' })}
+          onPress={() => setCartOpen(true)}
         >
           <View style={styles.cartLeft}>
             <View style={styles.cartIconWrap}>
@@ -171,6 +170,16 @@ export default function SaleScreen() {
           </View>
         </TouchableOpacity>
       )}
+
+      {/* CART SHEET */}
+      <CartSheet
+        visible={cartOpen}
+        onClose={() => setCartOpen(false)}
+        onCheckout={() => {
+          setCartOpen(false);
+          Toast.show({ type: 'info', text1: 'Payment sheet', text2: 'Coming next' });
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -227,7 +236,7 @@ const styles = StyleSheet.create({
 
   grid: {
     paddingHorizontal: spacing.md,
-    paddingBottom: 120, // leave room for cart bar
+    paddingBottom: 120,
   },
   row: {
     justifyContent: 'space-between',

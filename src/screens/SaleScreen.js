@@ -11,6 +11,7 @@ import { useCart } from '../context/CartContext';
 import ProductTile from '../components/ProductTile';
 import CartSheet from '../components/CartSheet';
 import PaymentSheet from '../components/PaymentSheet';
+import CashSheet from '../components/CashSheet';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 import { formatKES } from '../utils/currency';
 
@@ -24,6 +25,7 @@ export default function SaleScreen() {
   const [category, setCategory] = useState(ALL);
   const [cartOpen, setCartOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [cashOpen, setCashOpen] = useState(false);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -70,10 +72,26 @@ export default function SaleScreen() {
 
   const handleSelectPayment = (method) => {
     setPaymentOpen(false);
+
+    if (method === 'cash') {
+      setCashOpen(true);
+      return;
+    }
+
     Toast.show({
       type: 'info',
       text1: `${method.toUpperCase()} flow`,
       text2: 'Coming next',
+    });
+  };
+
+  const handleCashConfirm = ({ method, tendered, change }) => {
+    // TODO: POST /orders — coming in the next file
+    setCashOpen(false);
+    Toast.show({
+      type: 'success',
+      text1: 'Payment recorded',
+      text2: `Change: ${formatKES(change)}`,
     });
   };
 
@@ -197,6 +215,13 @@ export default function SaleScreen() {
         visible={paymentOpen}
         onClose={() => setPaymentOpen(false)}
         onSelect={handleSelectPayment}
+      />
+
+      {/* CASH SHEET */}
+      <CashSheet
+        visible={cashOpen}
+        onClose={() => setCashOpen(false)}
+        onConfirm={handleCashConfirm}
       />
     </SafeAreaView>
   );

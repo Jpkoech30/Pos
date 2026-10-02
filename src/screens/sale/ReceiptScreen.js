@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
-import { colors, spacing, typography, radii, shadows } from '../theme';
+import { colors, spacing, typography, radii, shadows } from '../../theme';
 
 export default function ReceiptScreen({ navigation, route }) {
   const { order } = route.params || {};

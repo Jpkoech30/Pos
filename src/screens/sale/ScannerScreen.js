@@ -13,9 +13,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
 
-import { useCart } from '../context/CartContext';
-import { productsApi } from '../services/products';
-import { colors, spacing, typography, radii, shadows } from '../theme';
+import { useCart } from '../../context/CartContext';
+import { productsApi } from '../../services/products';
+import { colors, spacing, typography, radii, shadows } from '../../theme';
 
 const BOX_W = 280;
 const BOX_H = 160;

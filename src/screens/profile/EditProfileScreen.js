@@ -4,12 +4,12 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import { z } from 'zod';
-import { useAuth } from '../context/AuthContext';
-import { usersApi } from '../services/users';
-import { useForm } from '../hooks/useForm';
-import FormInput from '../components/FormInput';
-import { Screen, Card, Button, SectionLabel } from '../components/ui';
-import { colors, spacing, typography } from '../theme';
+import { useAuth } from '../../context/AuthContext';
+import { usersApi } from '../../services/users';
+import { useForm } from '../../hooks/useForm';
+import FormInput from '../../components/FormInput';
+import { Screen, Card, Button, SectionLabel } from '../../components/ui';
+import { colors, spacing, typography } from '../../theme';
 
 const schema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters'),

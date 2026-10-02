@@ -7,9 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
-import { useCart } from '../context/CartContext';
-import { mpesaApi } from '../services/mpesa';
-import { colors, spacing, typography, radii } from '../theme';
+import { useCart } from '../../context/CartContext';
+import { mpesaApi } from '../../services/mpesa';
+import { colors, spacing, typography, radii } from '../../theme';
 
 const POLL_INTERVAL = 2000;
 const TIMEOUT_MS = 90000;

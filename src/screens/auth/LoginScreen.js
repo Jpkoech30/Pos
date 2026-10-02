@@ -6,10 +6,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { useAuth } from '../context/AuthContext';
-import { useForm } from '../hooks/useForm';
-import { loginSchema } from '../utils/validators';
-import FormInput from '../components/FormInput';
+import { useAuth } from '../../context/AuthContext';
+import { useForm } from '../../hooks/useForm';
+import { loginSchema } from '../../utils/validators';
+import FormInput from '../../components/FormInput';
 
 export default function LoginScreen({ navigation }) {
   const { signIn, biometricEnabled, enableBiometrics, signInWithBiometrics } = useAuth();

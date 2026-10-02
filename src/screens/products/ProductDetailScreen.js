@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Screen, Card, SectionLabel, Button } from '../components/ui';
-import { colors, spacing, typography, radii } from '../theme';
+import { Screen, Card, SectionLabel, Button } from '../../components/ui';
+import { colors, spacing, typography, radii } from '../../theme';
 
 const CATEGORY_META = {
   Coffee:    { icon: 'cafe-outline',       color: '#92400e', bg: '#fef3c7' },

@@ -6,10 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
-import { useCart } from '../context/CartContext';
-import { ordersApi } from '../services/orders';
-import { KIOSK } from '../config';
-import { colors, spacing, typography, radii } from '../theme';
+import { useCart } from '../../context/CartContext';
+import { ordersApi } from '../../services/orders';
+import { KIOSK } from '../../config';
+import { colors, spacing, typography, radii } from '../../theme';
 
 export default function MpesaPaymentScreen({ navigation }) {
   const { items, total, clearCart } = useCart();

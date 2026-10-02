@@ -13,8 +13,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
-import { productsApi } from '../services/products';
-import { colors, spacing, typography, radii, shadows } from '../theme';
+import { productsApi } from '../../services/products';
+import { colors, spacing, typography, radii, shadows } from '../../theme';
 
 const CATEGORY_META = {
   Coffee:    { icon: 'cafe-outline',       color: '#92400e', bg: '#fef3c7' },

@@ -6,9 +6,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { ordersApi } from '../services/orders';
-import { colors, spacing, typography, radii, shadows } from '../theme';
-import { formatKES } from '../utils/currency';
+import { ordersApi } from '../../services/orders';
+import { colors, spacing, typography, radii, shadows } from '../../theme';
+import { formatKES } from '../../utils/currency';
 
 const METHOD_META = {
   cash:  { icon: 'cash-outline',            color: '#059669', bg: '#ecfdf5', label: 'Cash' },

@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Screen, Button, Divider } from '../components/ui';
-import { useCart } from '../context/CartContext';
-import { colors, spacing, typography, radii } from '../theme';
+import { Screen, Button, Divider } from '../../components/ui';
+import { useCart } from '../../context/CartContext';
+import { colors, spacing, typography, radii } from '../../theme';
 
 export default function CartScreen({ navigation }) {
   const { items, subtotal, increment, decrement, removeItem, itemCount } = useCart();

@@ -1,0 +1,1 @@
+export const formatKsh = (n) => `KSh ${Number(n || 0).toFixed(2)}`;

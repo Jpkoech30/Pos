@@ -10,11 +10,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { z } from 'zod';
-import { productsApi } from '../services/products';
-import { useForm } from '../hooks/useForm';
-import FormInput from '../components/FormInput';
-import { Screen, Card, Button, SectionLabel } from '../components/ui';
-import { colors, spacing, typography, radii } from '../theme';
+import { productsApi } from '../../services/products';
+import { useForm } from '../../hooks/useForm';
+import FormInput from '../../components/FormInput';
+import { Screen, Card, Button, SectionLabel } from '../../components/ui';
+import { colors, spacing, typography, radii } from '../../theme';
 
 const schema = z.object({
   name: z.string().trim().min(2, 'Name must be at least 2 characters'),

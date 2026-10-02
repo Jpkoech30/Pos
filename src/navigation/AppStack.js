@@ -4,24 +4,27 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 
-// --- Screens ---
-import SaleScreen from '../screens/SaleScreen';
-import CheckoutScreen from '../screens/CheckoutScreen';
-import ScannerScreen from '../screens/ScannerScreen';
-import ReceiptScreen from '../screens/ReceiptScreen';
-import MpesaPaymentScreen from '../screens/MpesaPaymentScreen';
-import CashPaymentScreen from '../screens/CashPaymentScreen';
-import StkPushScreen from '../screens/StkPushScreen';
+// --- Sale ---
+import SaleScreen from '../screens/sale/SaleScreen';
+import CheckoutScreen from '../screens/sale/CheckoutScreen';
+import ScannerScreen from '../screens/sale/ScannerScreen';
+import MpesaPaymentScreen from '../screens/sale/MpesaPaymentScreen';
+import CashPaymentScreen from '../screens/sale/CashPaymentScreen';
+import StkPushScreen from '../screens/sale/StkPushScreen';
+import ReceiptScreen from '../screens/sale/ReceiptScreen';
 
-import ProductsScreen from '../screens/ProductsScreen';
-import ProductDetailScreen from '../screens/ProductDetailScreen';
-import ProductFormScreen from '../screens/ProductFormScreen';
+// --- Products ---
+import ProductsScreen from '../screens/products/ProductsScreen';
+import ProductDetailScreen from '../screens/products/ProductDetailScreen';
+import ProductFormScreen from '../screens/products/ProductFormScreen';
 
-import OrdersScreen from '../screens/OrdersScreen';
+// --- Orders ---
+import OrdersScreen from '../screens/orders/OrdersScreen';
 
-import ProfileScreen from '../screens/ProfileScreen';
-import EditProfileScreen from '../screens/EditProfileScreen';
-import ChangePasswordScreen from '../screens/ChangePasswordScreen';
+// --- Profile ---
+import ProfileScreen from '../screens/profile/ProfileScreen';
+import EditProfileScreen from '../screens/profile/EditProfileScreen';
+import ChangePasswordScreen from '../screens/profile/ChangePasswordScreen';
 
 import { colors } from '../theme';
 
@@ -80,6 +83,14 @@ const TAB_ICONS = {
   Profile: 'person-outline',
 };
 
+const HIDDEN_TABBAR_ROUTES = [
+  'Scanner',
+  'Receipt',
+  'MpesaPayment',
+  'CashPayment',
+  'StkPush',
+];
+
 export default function AppStack() {
   return (
     <Tab.Navigator
@@ -103,13 +114,7 @@ export default function AppStack() {
         component={SaleStackNavigator}
         options={({ route }) => {
           const routeName = getFocusedRouteNameFromRoute(route) ?? 'SaleHome';
-          if (
-            routeName === 'Scanner' ||
-            routeName === 'Receipt' ||
-            routeName === 'MpesaPayment' ||
-            routeName === 'CashPayment' ||
-            routeName === 'StkPush'
-          ) {
+          if (HIDDEN_TABBAR_ROUTES.includes(routeName)) {
             return { tabBarStyle: { display: 'none' } };
           }
           return {

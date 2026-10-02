@@ -5,11 +5,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import { z } from 'zod';
-import { usersApi } from '../services/users';
-import { useForm } from '../hooks/useForm';
-import FormInput from '../components/FormInput';
-import { Screen, Card, Button, SectionLabel } from '../components/ui';
-import { colors, spacing, typography } from '../theme';
+import { usersApi } from '../../services/users';
+import { useForm } from '../../hooks/useForm';
+import FormInput from '../../components/FormInput';
+import { Screen, Card, Button, SectionLabel } from '../../components/ui';
+import { colors, spacing, typography } from '../../theme';
 
 const schema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),

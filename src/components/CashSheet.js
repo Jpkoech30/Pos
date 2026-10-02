@@ -1,52 +1,26 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React from 'react';
 import {
-  Modal, View, Text, TouchableOpacity, StyleSheet, Pressable,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
 import { useCart } from '../context/CartContext';
 import { colors, spacing, typography, radii, shadows } from '../theme';
-import { formatKES } from '../utils/currency';
 
-// Common Kenyan bills/quick amounts
-const QUICK_AMOUNTS = [50, 100, 200, 500, 1000];
+export default function CartSheet({ visible, onClose, onCheckout }) {
+  const {
+    items, updateQty, clearCart,
+    subtotal, tax, total, count,
+  } = useCart();
 
-export default function CashSheet({ visible, onClose, onConfirm }) {
-  const cart = useCart();
-  const [tendered, setTendered] = useState('');
-
-  // Reset when reopened
-  useEffect(() => {
-    if (visible) setTendered('');
-  }, [visible]);
-
-  const tenderedNum = Number(tendered) || 0;
-  const total = cart.total;
-  const change = tenderedNum - total;
-  const enough = tenderedNum >= total;
-
-  const append = (digit) => {
-    // Prevent leading zeros and limit length
-    if (tendered === '' && digit === '0') return;
-    if (tendered.length >= 7) return;
-    setTendered((prev) => prev + digit);
+  const handleClear = () => {
+    clearCart();
+    onClose();
   };
 
-  const backspace = () => setTendered((prev) => prev.slice(0, -1));
-  const clear = () => setTendered('');
-
-  const setExact = () => setTendered(String(Math.round(total)));
-
-  const handleQuick = (amount) => {
-    setTendered(String(amount));
-  };
-
-  const handleConfirm = () => {
-    if (!enough) return;
-    onConfirm({
-      method: 'cash',
-      tendered: tenderedNum,
-      change,
-    });
+  const handlePay = () => {
+    onClose();
+    onCheckout();
   };
 
   return (
@@ -56,262 +30,287 @@ export default function CashSheet({ visible, onClose, onConfirm }) {
       animationType="slide"
       onRequestClose={onClose}
     >
-      <Pressable style={styles.backdrop} onPress={onClose} />
-
-      <View style={styles.sheet}>
-        <View style={styles.handleWrap}>
-          <View style={styles.handle} />
-        </View>
-
-        {/* Displays */}
-        <View style={styles.displays}>
-          <View style={styles.displayRow}>
-            <Text style={styles.displayLabel}>Amount due</Text>
-            <Text style={styles.displayValue}>{formatKES(total)}</Text>
-          </View>
-
-          <View style={styles.displayRow}>
-            <Text style={styles.displayLabel}>Cash received</Text>
-            <Text style={[styles.displayValue, styles.displayBig]}>
-              {tendered ? formatKES(tenderedNum) : '—'}
-            </Text>
-          </View>
-
-          <View
-            style={[
-              styles.changeRow,
-              !tendered && styles.changeRowHidden,
-              enough ? styles.changeRowOk : styles.changeRowWarn,
-            ]}
-          >
-            <Text style={[styles.changeLabel, enough ? styles.changeLabelOk : styles.changeLabelWarn]}>
-              {enough ? 'Change due' : 'Still needed'}
-            </Text>
-            <Text style={[styles.changeValue, enough ? styles.changeValueOk : styles.changeValueWarn]}>
-              {formatKES(Math.abs(change))}
-            </Text>
-          </View>
-        </View>
-
-        {/* Quick amounts */}
-        <View style={styles.quickRow}>
-          <TouchableOpacity style={styles.quickChip} onPress={setExact}>
-            <Text style={styles.quickChipText}>Exact</Text>
-          </TouchableOpacity>
-
-          {QUICK_AMOUNTS.map((amt) => (
-            <TouchableOpacity
-              key={amt}
-              style={styles.quickChip}
-              onPress={() => handleQuick(amt)}
-            >
-              <Text style={styles.quickChipText}>{amt}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Keypad */}
-        <View style={styles.keypad}>
-          {['1','2','3','4','5','6','7','8','9'].map((k) => (
-            <KeyButton key={k} label={k} onPress={() => append(k)} />
-          ))}
-          <KeyButton label="C" onPress={clear} variant="secondary" />
-          <KeyButton label="0" onPress={() => append('0')} />
-          <KeyButton
-            icon="backspace-outline"
-            onPress={backspace}
-            variant="secondary"
-          />
-        </View>
-
-        {/* Confirm */}
+      <View style={styles.overlay}>
         <TouchableOpacity
-          style={[styles.confirmBtn, !enough && styles.confirmBtnDisabled]}
-          onPress={handleConfirm}
-          disabled={!enough}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="checkmark-circle"
-            size={22}
-            color={colors.textInverse}
-          />
-          <Text style={styles.confirmText}>
-            {enough ? `Confirm ${formatKES(total)}` : 'Enter amount'}
-          </Text>
-        </TouchableOpacity>
+          style={styles.backdrop}
+          onPress={onClose}
+          activeOpacity={1}
+        />
 
-        <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
-          <Text style={styles.cancelText}>Cancel</Text>
-        </TouchableOpacity>
+        <View style={styles.sheet}>
+          {/* Handle */}
+          <View style={styles.handle} />
+
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>
+              {count} {count === 1 ? 'item' : 'items'}
+            </Text>
+            <TouchableOpacity onPress={onClose} hitSlop={10}>
+              <Ionicons name="close" size={24} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Items */}
+          <ScrollView
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {items.length === 0 ? (
+              <Text style={styles.empty}>Cart is empty</Text>
+            ) : (
+              items.map((item) => (
+                <View key={item.productId} style={styles.row}>
+                  <View style={styles.rowLeft}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.unitPrice}>
+                      KSh {Number(item.price).toFixed(2)} each
+                    </Text>
+                  </View>
+
+                  <View style={styles.qtyControls}>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      onPress={() => updateQty(item.productId, item.quantity - 1)}
+                      hitSlop={6}
+                    >
+                      <Ionicons name="remove" size={20} color={colors.text} />
+                    </TouchableOpacity>
+                    <Text style={styles.qtyNum}>{item.quantity}</Text>
+                    <TouchableOpacity
+                      style={styles.qtyBtn}
+                      onPress={() => updateQty(item.productId, item.quantity + 1)}
+                      hitSlop={6}
+                    >
+                      <Ionicons name="add" size={20} color={colors.text} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.linePrice}>
+                    KSh {(item.price * item.quantity).toFixed(2)}
+                  </Text>
+                </View>
+              ))
+            )}
+          </ScrollView>
+
+          {/* Totals */}
+          {items.length > 0 && (
+            <View style={styles.totalsBox}>
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsLabel}>Subtotal</Text>
+                <Text style={styles.totalsValue}>KSh {subtotal.toFixed(2)}</Text>
+              </View>
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsLabel}>Tax</Text>
+                <Text style={styles.totalsValue}>KSh {tax.toFixed(2)}</Text>
+              </View>
+              <View style={[styles.totalsRow, styles.grandTotalRow]}>
+                <Text style={styles.grandTotalLabel}>Total</Text>
+                <Text style={styles.grandTotalValue}>KSh {total.toFixed(2)}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* Actions */}
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[styles.clearBtn, items.length === 0 && styles.btnDisabled]}
+              onPress={handleClear}
+              disabled={items.length === 0}
+            >
+              <Ionicons
+                name="trash-outline"
+                size={18}
+                color={items.length === 0 ? colors.textMuted : colors.danger}
+              />
+              <Text
+                style={[
+                  styles.clearText,
+                  items.length === 0 && styles.clearTextDisabled,
+                ]}
+              >
+                Clear
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.payBtn, items.length === 0 && styles.btnDisabled]}
+              onPress={handlePay}
+              disabled={items.length === 0}
+            >
+              <Text style={styles.payText}>Pay</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     </Modal>
   );
 }
 
-function KeyButton({ label, icon, onPress, variant = 'primary' }) {
-  return (
-    <TouchableOpacity
-      style={[styles.key, variant === 'secondary' && styles.keySecondary]}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
-      {icon ? (
-        <Ionicons name={icon} size={22} color={colors.text} />
-      ) : (
-        <Text style={styles.keyText}>{label}</Text>
-      )}
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
-  backdrop: {
+  overlay: {
     flex: 1,
-    backgroundColor: colors.overlayDark,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   sheet: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radii.xxl,
-    borderTopRightRadius: radii.xxl,
+    borderTopLeftRadius: radii.lg * 2,
+    borderTopRightRadius: radii.lg * 2,
     paddingBottom: spacing.lg,
-    ...shadows.xl,
-  },
-  handleWrap: {
-    alignItems: 'center',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+    maxHeight: '85%',
+    ...shadows.lg,
   },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginTop: spacing.md,
   },
 
-  // Displays
-  displays: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
-    gap: spacing.sm,
-  },
-  displayRow: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.screenPadding,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
   },
-  displayLabel: {
-    ...typography.caption,
+  title: { ...typography.h3, color: colors.text },
+
+  list: {
+    maxHeight: 400,
+  },
+  listContent: {
+    paddingHorizontal: spacing.screenPadding,
+    paddingBottom: spacing.md,
+  },
+  empty: {
+    ...typography.body,
     color: colors.textMuted,
-    textTransform: 'uppercase',
-  },
-  displayValue: {
-    ...typography.h3,
-    color: colors.text,
-  },
-  displayBig: {
-    ...typography.h2,
-    color: colors.primary,
+    textAlign: 'center',
+    paddingVertical: spacing.xxl,
   },
 
-  changeRow: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.md,
-    marginTop: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  changeRowHidden: { opacity: 0.4 },
-  changeRowOk: { backgroundColor: colors.successSoft },
-  changeRowWarn: { backgroundColor: colors.dangerSoft },
-  changeLabel: {
+  rowLeft: { flex: 1, marginRight: spacing.sm },
+  name: {
     ...typography.bodyMedium,
+    color: colors.text,
     fontWeight: '600',
   },
-  changeLabelOk: { color: colors.success },
-  changeLabelWarn: { color: colors.danger },
-  changeValue: {
-    ...typography.h3,
+  unitPrice: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    marginTop: 2,
   },
-  changeValueOk: { color: colors.success },
-  changeValueWarn: { color: colors.danger },
 
-  // Quick amounts
-  quickRow: {
+  qtyControls: {
     flexDirection: 'row',
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  quickChip: {
-    flex: 1,
-    paddingVertical: spacing.sm,
     alignItems: 'center',
-    borderRadius: radii.md,
-    backgroundColor: colors.surfaceAlt,
+    gap: spacing.sm,
+    marginRight: spacing.md,
+  },
+  qtyBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.border,
   },
-  quickChipText: {
-    ...typography.captionMedium,
+  qtyNum: {
+    ...typography.bodyMedium,
     color: colors.text,
+    fontWeight: '600',
+    minWidth: 20,
+    textAlign: 'center',
   },
 
-  // Keypad
-  keypad: {
+  linePrice: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    fontWeight: '600',
+    minWidth: 80,
+    textAlign: 'right',
+  },
+
+  totalsBox: {
+    paddingHorizontal: spacing.screenPadding,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  totalsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+  },
+  totalsLabel: { ...typography.body, color: colors.textSecondary },
+  totalsValue: { ...typography.body, color: colors.text },
+  grandTotalRow: {
+    marginTop: spacing.xs,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  grandTotalLabel: { ...typography.h3, color: colors.text },
+  grandTotalValue: { ...typography.h3, color: colors.text },
+
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.screenPadding,
+    paddingTop: spacing.md,
+  },
+  clearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
     paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  key: {
-    width: '31%',
-    aspectRatio: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.md,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  keySecondary: { backgroundColor: colors.surfaceAlt },
-  keyText: {
-    ...typography.h3,
-    color: colors.text,
-  },
-
-  // Confirm / cancel
-  confirmBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.success,
-    marginHorizontal: spacing.lg,
     paddingVertical: spacing.lg,
     borderRadius: radii.md,
-    ...shadows.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  confirmBtnDisabled: {
-    backgroundColor: colors.borderStrong,
-    opacity: 0.7,
-  },
-  confirmText: {
+  clearText: {
     ...typography.button,
-    color: colors.textInverse,
+    color: colors.danger,
   },
-
-  cancelBtn: {
-    marginTop: spacing.sm,
-    paddingVertical: spacing.sm,
+  clearTextDisabled: { color: colors.textMuted },
+  payBtn: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    borderRadius: radii.md,
   },
-  cancelText: {
-    ...typography.bodyMedium,
-    color: colors.textSecondary,
+  payText: {
+    ...typography.button,
+    color: '#fff',
+    fontSize: 17,
   },
+  btnDisabled: { opacity: 0.4 },
 });

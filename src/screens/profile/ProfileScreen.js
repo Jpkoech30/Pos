@@ -4,10 +4,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { useAuth } from '../context/AuthContext';
-import { usersApi } from '../services/users';
-import { Screen, Card, Divider, SectionLabel } from '../components/ui';
-import { colors, spacing, typography, radii } from '../theme';
+import { useAuth } from '../../context/AuthContext';
+import { usersApi } from '../../services/users';
+import { Screen, Card, Divider, SectionLabel } from '../../components/ui';
+import { colors, spacing, typography, radii } from '../../theme';
 
 export default function ProfileScreen({ navigation }) {
   const { user, signOut } = useAuth();

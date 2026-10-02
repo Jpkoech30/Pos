@@ -5,10 +5,10 @@ import {
   TouchableWithoutFeedback, Keyboard, ScrollView,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
-import { useAuth } from '../context/AuthContext';
-import { useForm } from '../hooks/useForm';
-import { signupSchema } from '../utils/validators';
-import FormInput from '../components/FormInput';
+import { useAuth } from '../../context/AuthContext';
+import { useForm } from '../../hooks/useForm';
+import { signupSchema } from '../../utils/validators';
+import FormInput from '../../components/FormInput';
 
 export default function SignupScreen({ navigation }) {
   const { signUp } = useAuth();

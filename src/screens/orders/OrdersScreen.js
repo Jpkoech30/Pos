@@ -1,37 +1,83 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl, Modal, Pressable, ScrollView,
+  View, Text, SectionList, TouchableOpacity, StyleSheet,
+  ActivityIndicator, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { ordersApi } from '../../services/orders';
-import { colors, spacing, typography, radii, shadows } from '../../theme';
-import { formatKES } from '../../utils/currency';
 
-const METHOD_META = {
-  cash:  { icon: 'cash-outline',            color: '#059669', bg: '#ecfdf5', label: 'Cash' },
-  mpesa: { icon: 'phone-portrait-outline',  color: '#0891b2', bg: '#ecfeff', label: 'M-Pesa' },
-  card:  { icon: 'card-outline',            color: '#7c3aed', bg: '#f5f3ff', label: 'Card' },
-  deni:  { icon: 'book-outline',            color: '#d97706', bg: '#fffbeb', label: 'Deni' },
+import { ordersApi } from '../../services/orders';
+import { formatKsh } from '../../utils/format';
+import { colors, spacing, typography, radii } from '../../theme';
+
+const PAYMENT_LABELS = {
+  cash: 'Cash',
+  card: 'Card',
+  mpesa: 'M-Pesa',
+  mpesa_stk: 'STK',
 };
 
-export default function OrdersScreen() {
+function sameDay(a, b) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function dayKey(d) {
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (sameDay(d, today)) return 'Today';
+  if (sameDay(d, yesterday)) return 'Yesterday';
+  return d.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+function buildSections(orders) {
+  const groups = new Map();
+  orders.forEach((o) => {
+    const d = new Date(o.createdAt);
+    const key = dayKey(d);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(o);
+  });
+
+  return Array.from(groups.entries()).map(([title, data]) => {
+    const total = data.reduce((s, o) => s + o.total, 0);
+    const cash = data
+      .filter((o) => o.paymentMethod === 'cash')
+      .reduce((s, o) => s + o.total, 0);
+    const mpesa = data
+      .filter((o) => o.paymentMethod !== 'cash')
+      .reduce((s, o) => s + o.total, 0);
+    return { title, data, total, cash, mpesa, count: data.length };
+  });
+}
+
+export default function OrdersScreen({ navigation }) {
   const [orders, setOrders] = useState([]);
-  const [stats, setStats] = useState({ count: 0, revenue: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selected, setSelected] = useState(null);
+  const [error, setError] = useState(null);
 
   const load = useCallback(async (isRefresh = false) => {
     try {
       if (!isRefresh) setLoading(true);
+      setError(null);
       const data = await ordersApi.list();
       setOrders(data.orders || []);
-      setStats(data.stats || { count: 0, revenue: 0 });
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Could not load orders', text2: err.message });
+      setError(err.message);
+      if (isRefresh) {
+        Toast.show({ type: 'error', text1: 'Refresh failed', text2: err.message });
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -39,13 +85,16 @@ export default function OrdersScreen() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', () => load(true));
+    return unsub;
+  }, [navigation, load]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    load(true);
-  };
+  const onRefresh = () => { setRefreshing(true); load(true); };
 
-  if (loading) {
+  const sections = useMemo(() => buildSections(orders), [orders]);
+
+  if (loading && orders.length === 0) {
     return (
       <SafeAreaView style={styles.root} edges={['top']}>
         <View style={styles.center}>
@@ -57,160 +106,79 @@ export default function OrdersScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
-      {/* STATS */}
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Today's sales</Text>
-          <Text style={styles.statValue}>{stats.count}</Text>
-        </View>
-        <View style={[styles.statCard, styles.statCardPrimary]}>
-          <Text style={[styles.statLabel, styles.statLabelPrimary]}>Revenue</Text>
-          <Text style={[styles.statValue, styles.statValuePrimary]}>
-            {formatKES(stats.revenue)}
-          </Text>
-        </View>
+      <View style={styles.header}>
+        <Text style={styles.title}>Orders</Text>
       </View>
 
-      {/* LIST */}
-      <FlatList
-        data={orders}
-        keyExtractor={(o) => o.id}
-        contentContainerStyle={styles.list}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        stickySectionHeadersEnabled={false}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No sales yet</Text>
-            <Text style={styles.emptyHelp}>
-              Completed sales will appear here.
-            </Text>
+          <View style={styles.emptyBox}>
+            <Text style={styles.emptyText}>No orders yet</Text>
+            <Text style={styles.emptySub}>Completed sales will appear here</Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <OrderRow order={item} onPress={() => setSelected(item)} />
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <Text style={styles.sectionMeta}>
+              {section.count} · {formatKsh(section.total)}
+            </Text>
+          </View>
         )}
-      />
-
-      {/* DETAIL SHEET */}
-      <OrderDetailSheet
-        order={selected}
-        onClose={() => setSelected(null)}
+        renderSectionFooter={({ section }) => (
+          <View style={styles.sectionFooter}>
+            <Text style={styles.footerText}>
+              Cash {formatKsh(section.cash)}
+            </Text>
+            <Text style={styles.footerDot}>·</Text>
+            <Text style={styles.footerText}>
+              M-Pesa {formatKsh(section.mpesa)}
+            </Text>
+          </View>
+        )}
+        renderItem={({ item }) => (
+          <OrderRow
+            order={item}
+            onPress={() => navigation.navigate('OrderDetail', { order: item })}
+          />
+        )}
       />
     </SafeAreaView>
   );
 }
 
 function OrderRow({ order, onPress }) {
-  const meta = METHOD_META[order.paymentMethod] || METHOD_META.cash;
-  const time = new Date(order.createdAt).toLocaleString('en-KE', {
-    day: '2-digit',
-    month: 'short',
+  const label = PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod;
+
+  const time = new Date(order.createdAt).toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
   });
-  const itemsCount = order.items?.reduce((s, i) => s + i.quantity, 0) || 0;
+  const itemCount = order.items.reduce((s, i) => s + i.quantity, 0);
+  const failed = order.paymentStatus === 'failed';
 
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.rowIcon, { backgroundColor: meta.bg }]}>
-        <Ionicons name={meta.icon} size={20} color={meta.color} />
-      </View>
-
-      <View style={styles.rowBody}>
-        <Text style={styles.rowTitle}>
-          {itemsCount} item{itemsCount === 1 ? '' : 's'} · {meta.label}
+    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.6}>
+      <View style={styles.left}>
+        <Text style={styles.time}>{time}</Text>
+        <Text style={styles.meta}>
+          {itemCount} item{itemCount === 1 ? '' : 's'} · {label}
+          {failed ? ' · Failed' : ''}
         </Text>
-        <Text style={styles.rowMeta}>{time}</Text>
       </View>
 
-      <View style={styles.rowRight}>
-        <Text style={styles.rowAmount}>{formatKES(order.total)}</Text>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-      </View>
+      <Text style={[styles.total, failed && styles.totalFailed]}>
+        {formatKsh(order.total)}
+      </Text>
     </TouchableOpacity>
-  );
-}
-
-function OrderDetailSheet({ order, onClose }) {
-  if (!order) return null;
-
-  const meta = METHOD_META[order.paymentMethod] || METHOD_META.cash;
-  const time = new Date(order.createdAt).toLocaleString('en-KE', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-
-  return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-
-      <View style={styles.sheet}>
-        <View style={styles.handleWrap}>
-          <View style={styles.handle} />
-        </View>
-
-        <ScrollView contentContainerStyle={styles.sheetBody}>
-          {/* Header */}
-          <View style={styles.sheetHeader}>
-            <View style={[styles.sheetIcon, { backgroundColor: meta.bg }]}>
-              <Ionicons name={meta.icon} size={24} color={meta.color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sheetTitle}>Sale #{order.id?.replace(/^o/, '').padStart(4, '0')}</Text>
-              <Text style={styles.sheetMeta}>{time}</Text>
-            </View>
-          </View>
-
-          <View style={styles.dashed} />
-
-          {/* Items */}
-          {order.items?.map((item, idx) => (
-            <View key={idx} style={styles.itemRow}>
-              <Text style={styles.itemQty}>{item.quantity}×</Text>
-              <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.itemPrice}>
-                {formatKES(Number(item.price) * item.quantity)}
-              </Text>
-            </View>
-          ))}
-
-          <View style={styles.dashed} />
-
-          {/* Totals */}
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Subtotal</Text>
-            <Text style={styles.totalValue}>{formatKES(order.subtotal)}</Text>
-          </View>
-          {order.tax > 0 && (
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Tax</Text>
-              <Text style={styles.totalValue}>{formatKES(order.tax)}</Text>
-            </View>
-          )}
-          <View style={[styles.totalRow, styles.grandRow]}>
-            <Text style={styles.grandLabel}>TOTAL</Text>
-            <Text style={styles.grandValue}>{formatKES(order.total)}</Text>
-          </View>
-
-          <View style={styles.dashed} />
-
-          <View style={styles.payRow}>
-            <Text style={styles.payLabel}>Paid via</Text>
-            <Text style={styles.payValue}>{meta.label}</Text>
-          </View>
-        </ScrollView>
-
-        <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-          <Text style={styles.closeBtnText}>Close</Text>
-        </TouchableOpacity>
-      </View>
-    </Modal>
   );
 }
 
@@ -218,176 +186,89 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+  header: {
+    paddingHorizontal: spacing.screenPadding,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    ...shadows.sm,
-  },
-  statCardPrimary: {
-    backgroundColor: colors.primary,
-  },
-  statLabel: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: spacing.xs,
-  },
-  statLabelPrimary: {
-    color: '#c7d2fe',
-  },
-  statValue: {
-    ...typography.h2,
-    color: colors.text,
-  },
-  statValuePrimary: {
-    color: colors.textInverse,
+  title: { ...typography.h2, color: colors.text },
+
+  listContent: {
+    paddingHorizontal: spacing.screenPadding,
+    paddingBottom: spacing.xxxl,
+    flexGrow: 1,
   },
 
-  // List
-  list: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxl,
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.sm,
+  },
+  sectionTitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '600',
+  },
+  sectionMeta: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+
+  sectionFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  footerText: {
+    ...typography.tiny,
+    color: colors.textMuted,
+  },
+  footerDot: {
+    ...typography.tiny,
+    color: colors.textMuted,
   },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: colors.surface,
     borderRadius: radii.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xs,
     gap: spacing.md,
-    ...shadows.sm,
   },
-  rowIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  rowBody: { flex: 1 },
-  rowTitle: { ...typography.bodyMedium, color: colors.text },
-  rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  rowRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  rowAmount: { ...typography.bodyBold, color: colors.text },
-
-  // Empty
-  empty: {
-    alignItems: 'center',
-    paddingTop: spacing.huge,
-    gap: spacing.sm,
-  },
-  emptyTitle: { ...typography.h4, color: colors.text, marginTop: spacing.sm },
-  emptyHelp: { ...typography.body, color: colors.textMuted },
-
-  // Detail sheet
-  backdrop: { flex: 1, backgroundColor: colors.overlayDark },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radii.xxl,
-    borderTopRightRadius: radii.xxl,
-    maxHeight: '85%',
-    paddingBottom: spacing.lg,
-    ...shadows.xl,
-  },
-  handleWrap: {
-    alignItems: 'center',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-  },
-  sheetBody: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  sheetIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetTitle: { ...typography.h4, color: colors.text },
-  sheetMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-
-  dashed: {
-    borderStyle: 'dashed',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    marginVertical: spacing.md,
-  },
-
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 4,
-    gap: spacing.sm,
-  },
-  itemQty: { ...typography.bodyBold, color: colors.primary, minWidth: 32 },
-  itemName: { ...typography.body, color: colors.text, flex: 1 },
-  itemPrice: {
+  left: { flex: 1, minWidth: 0 },
+  time: {
     ...typography.bodyMedium,
     color: colors.text,
-    minWidth: 80,
-    textAlign: 'right',
+    fontWeight: '500',
   },
+  meta: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  total: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  totalFailed: { color: colors.danger, textDecorationLine: 'line-through' },
 
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 2,
-  },
-  totalLabel: { ...typography.body, color: colors.textSecondary },
-  totalValue: { ...typography.bodyMedium, color: colors.text },
-  grandRow: {
-    paddingTop: spacing.sm,
-    marginTop: spacing.xs,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  grandLabel: { ...typography.h4, color: colors.text },
-  grandValue: { ...typography.h3, color: colors.primary },
-
-  payRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  payLabel: { ...typography.caption, color: colors.textMuted },
-  payValue: { ...typography.bodyMedium, color: colors.text },
-
-  closeBtn: {
-    marginHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderRadius: radii.md,
-    backgroundColor: colors.surfaceAlt,
+  emptyBox: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: spacing.xxxl * 2,
   },
-  closeBtnText: { ...typography.button, color: colors.text },
+  emptyText: { ...typography.body, color: colors.textSecondary },
+  emptySub: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
 });

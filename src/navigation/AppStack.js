@@ -20,6 +20,7 @@ import ProductFormScreen from '../screens/products/ProductFormScreen';
 
 // --- Orders ---
 import OrdersScreen from '../screens/orders/OrdersScreen';
+import OrderDetailScreen from '../screens/orders/OrderDetailScreen';
 
 // --- Profile ---
 import ProfileScreen from '../screens/profile/ProfileScreen';
@@ -62,6 +63,7 @@ function OrdersStackNavigator() {
   return (
     <OrdersStack.Navigator>
       <OrdersStack.Screen name="OrdersHome" component={OrdersScreen} options={{ headerShown: false }} />
+      <OrdersStack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Order' }} />
     </OrdersStack.Navigator>
   );
 }

@@ -1,73 +1,90 @@
 /**
- * COLOR TOKENS
+ * Theme colors — Safaricom brand palette
  *
- * All colors used in the app live here. Never write a hex value directly
- * inside a screen or component — always reference a token from this file.
+ * All colors in the app reference this file. Nothing should be hardcoded
+ * with a hex value in a screen or component — if you need a new color,
+ * add it here so it can be changed in one place later.
  *
- * Why: changing the brand color should be a one-line edit, not a
- * find-and-replace across 20 files.
+ * Structure:
+ *   - Brand colors (primary green, M-Pesa red)
+ *   - Status colors (success, warning, danger)
+ *   - Surfaces (backgrounds and cards)
+ *   - Text (four levels of emphasis)
+ *   - Borders
  */
 export const colors = {
-  // --- Brand ---
-  // The main color of the app. Used for buttons, links, focus rings,
-  // tab bar active state, and primary icons.
-  primary: '#2563eb',
+  // ─── Brand ─────────────────────────────────────────────
+  // Safaricom green. Used for every interactive element:
+  // active tabs, buttons, focus rings, loading spinners.
+  primary: '#39B54A',
 
-  // Darker shade — used for gradient starts, pressed states, or
-  // when you need extra contrast on light backgrounds.
-  primaryDark: '#1e3a8a',
+  // A darker shade of the brand green. Used for pressed states
+  // and anywhere the primary needs extra weight (e.g. a header bar).
+  primaryDark: '#009A3E',
 
-  // Lighter shade — used for gradient ends and hover/press glows.
-  primaryLight: '#3b82f6',
+  // Very light green tint. Used as a background for selected
+  // tiles, chips, and any subtle "this is active" surface.
+  primarySoft: '#E8F8EC',
 
-  // Very light tint — used as a background behind primary-colored
-  // icons or as a soft highlight surface.
-  primarySoft: '#eff6ff',
+  // Text color to use on top of `primary`. Almost always white.
+  primaryText: '#FFFFFF',
 
-  // --- Semantic ---
-  // Colors with meaning. Use these instead of picking a green/red
-  // manually — that way "success" is consistent everywhere.
-  success: '#059669',
-  successSoft: '#ecfdf5',   // light bg for success banners
-  warning: '#d97706',
-  warningSoft: '#fffbeb',
-  danger: '#dc2626',        // errors, destructive actions
-  dangerSoft: '#fef2f2',    // light bg for error inputs / danger rows
-  info: '#0891b2',
-  infoSoft: '#ecfeff',      // light bg for info banners
+  // ─── M-Pesa ────────────────────────────────────────────
+  // M-Pesa red. Kept as its own token (not aliased to danger)
+  // so we can use it on the M-Pesa tile without implying error.
+  mpesaRed: '#EC1C24',
 
-  // --- Text ---
-  // Four levels of text hierarchy. Use them consistently:
-  //   text       → headings, primary content
-  //   textSecondary → body paragraphs, sublabels
-  //   textMuted  → captions, hints, disabled text
-  //   textInverse → text on dark/gradient backgrounds
-  text: '#0f172a',
-  textSecondary: '#475569',
-  textMuted: '#94a3b8',
-  textInverse: '#ffffff',
+  // Light red background for M-Pesa-related surfaces if needed.
+  mpesaSoft: '#FDE8E8',
 
-  // --- Surfaces ---
-  // Backgrounds and borders. Follow this hierarchy:
-  //   background → the page itself (light gray)
-  //   surface    → cards, inputs, tab bar (white)
-  //   surfaceAlt → subtle inner surfaces (very light gray)
-  //   border     → default hairlines and dividers
-  //   borderStrong → emphasized borders (focused, active states)
-  background: '#f1f5f9',
-  surface: '#ffffff',
-  surfaceAlt: '#fafafa',
-  border: '#e2e8f0',
-  borderStrong: '#cbd5e1',
+  // ─── Status ────────────────────────────────────────────
+  // Success — green checkmarks, "sale complete", payment received.
+  success: '#39B54A',
+  successSoft: '#E8F8EC',
 
-  // --- Hero gradient ---
-  // The 3-stop gradient used on the Home hero card. Kept as an
-  // array so expo-linear-gradient can consume it directly.
-  heroGradient: ['#1e3a8a', '#2563eb', '#3b82f6'],
+  // Warning — low stock, "3 items left", non-blocking attention.
+  warning: '#F59E0B',
+  warningSoft: '#FEF3C7',
 
-  // --- Overlays ---
-  // Translucent tints for elements placed on top of other content
-  // (glass-style icon buttons on gradients, modal scrims).
-  overlayLight: 'rgba(255,255,255,0.15)',
-  overlayDark: 'rgba(0,0,0,0.4)',
+  // Danger — Safaricom red. Failed payments, "Clear all" links,
+  // short-payment warnings, anything destructive or wrong.
+  danger: '#EC1A23',
+  dangerSoft: '#FDE8E8',
+
+  // ─── Surfaces ──────────────────────────────────────────
+  // Page background. Slightly off-white so cards stand out
+  // without needing heavy shadows.
+  background: '#F4F6F8',
+
+  // Card / tile background. Pure white for maximum contrast
+  // against `background`.
+  surface: '#FFFFFF',
+
+  // Alternate surface for nested cards or subtle panels.
+  surfaceAlt: '#F9FAFB',
+
+  // ─── Text ──────────────────────────────────────────────
+  // Four levels of emphasis. Use the lowest level that still reads.
+
+  // Primary text — headings, item names, amounts.
+  text: '#1A1A1A',
+
+  // Secondary text — labels, subtitles, anything that supports
+  // the primary text but isn't the star.
+  textSecondary: '#4B5563',
+
+  // Muted text — timestamps, helper text, disabled states.
+  // Lowest emphasis, still readable.
+  textMuted: '#9CA3AF',
+
+  // Text on dark or colored backgrounds (buttons, badges).
+  textInverse: '#FFFFFF',
+
+  // ─── Borders ───────────────────────────────────────────
+  // Standard border — card edges, dividers, input outlines.
+  // Matches Safaricom's Catskill White.
+  border: '#E4EAF1',
+
+  // Stronger border for emphasis — focused inputs, selected cards.
+  borderStrong: '#D1D5DB',
 };

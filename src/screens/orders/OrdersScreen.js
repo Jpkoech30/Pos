@@ -9,7 +9,7 @@ import Toast from 'react-native-toast-message';
 
 import { ordersApi } from '../../services/orders';
 import { formatKsh } from '../../utils/format';
-import { colors, spacing, typography, radii } from '../../theme';
+import { colors, spacing, typography, radii, shadows } from '../../theme';
 
 const PAYMENT_LABELS = {
   cash: 'Cash',
@@ -40,24 +40,38 @@ function dayKey(d) {
   });
 }
 
+function isoDate(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 function buildSections(orders) {
   const groups = new Map();
   orders.forEach((o) => {
     const d = new Date(o.createdAt);
     const key = dayKey(d);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(o);
+    if (!groups.has(key)) groups.set(key, { date: isoDate(d), data: [] });
+    groups.get(key).data.push(o);
   });
 
-  return Array.from(groups.entries()).map(([title, data]) => {
+  return Array.from(groups.entries()).map(([title, { date, data }]) => {
     const total = data.reduce((s, o) => s + o.total, 0);
     const cash = data
       .filter((o) => o.paymentMethod === 'cash')
       .reduce((s, o) => s + o.total, 0);
-    const mpesa = data
-      .filter((o) => o.paymentMethod !== 'cash')
-      .reduce((s, o) => s + o.total, 0);
-    return { title, data, total, cash, mpesa, count: data.length };
+    const mpesa = total - cash;
+    return {
+      title,
+      date,
+      data,
+      total,
+      cash,
+      mpesa,
+      count: data.length,
+      cashRatio: total > 0 ? cash / total : 0,
+    };
   });
 }
 
@@ -126,27 +140,22 @@ export default function OrdersScreen({ navigation }) {
           </View>
         }
         renderSectionHeader={({ section }) => (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <Text style={styles.sectionMeta}>
-              {section.count} · {formatKsh(section.total)}
-            </Text>
-          </View>
+          <DayHeader
+            section={section}
+            onPress={() =>
+              navigation.navigate('DailyAnalytics', {
+                title: section.title,
+                date: section.date,
+                allOrders: orders,
+              })
+            }
+          />
         )}
-        renderSectionFooter={({ section }) => (
-          <View style={styles.sectionFooter}>
-            <Text style={styles.footerText}>
-              Cash {formatKsh(section.cash)}
-            </Text>
-            <Text style={styles.footerDot}>·</Text>
-            <Text style={styles.footerText}>
-              M-Pesa {formatKsh(section.mpesa)}
-            </Text>
-          </View>
-        )}
-        renderItem={({ item }) => (
+        renderSectionFooter={() => <View style={styles.cardEnd} />}
+        renderItem={({ item, index, section }) => (
           <OrderRow
             order={item}
+            isLast={index === section.data.length - 1}
             onPress={() => navigation.navigate('OrderDetail', { order: item })}
           />
         )}
@@ -155,7 +164,56 @@ export default function OrdersScreen({ navigation }) {
   );
 }
 
-function OrderRow({ order, onPress }) {
+function DayHeader({ section, onPress }) {
+  const { title, count, total, cash, mpesa, cashRatio } = section;
+  const cashPct = Math.round(cashRatio * 100);
+
+  return (
+    <TouchableOpacity
+      style={styles.dayCardTop}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <View style={styles.dayRow}>
+        <Text style={styles.dayLabel}>{title}</Text>
+        <View style={styles.dayRight}>
+          <Text style={styles.dayCount}>
+            {count} {count === 1 ? 'order' : 'orders'}
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+        </View>
+      </View>
+
+      <Text style={styles.dayTotal}>{formatKsh(total)}</Text>
+
+      <View style={styles.barTrack}>
+        <View style={[styles.barFill, { flex: cashRatio }]} />
+        <View style={[styles.barRest, { flex: 1 - cashRatio }]} />
+      </View>
+
+      <View style={styles.splitRow}>
+        <View style={styles.splitItem}>
+          <View style={[styles.splitDot, { backgroundColor: colors.primary }]} />
+          <Text style={styles.splitLabel}>Cash</Text>
+          <Text style={styles.splitValue}>{formatKsh(cash)}</Text>
+        </View>
+        <View style={styles.splitItem}>
+          <View style={[styles.splitDot, { backgroundColor: colors.mpesaRed }]} />
+          <Text style={styles.splitLabel}>M-Pesa</Text>
+          <Text style={styles.splitValue}>{formatKsh(mpesa)}</Text>
+        </View>
+      </View>
+
+      {cash > 0 && mpesa > 0 && (
+        <Text style={styles.splitHint}>
+          {cashPct}% cash · {100 - cashPct}% M-Pesa
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+function OrderRow({ order, isLast, onPress }) {
   const label = PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod;
 
   const time = new Date(order.createdAt).toLocaleTimeString('en-GB', {
@@ -166,18 +224,23 @@ function OrderRow({ order, onPress }) {
   const failed = order.paymentStatus === 'failed';
 
   return (
-    <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.6}>
-      <View style={styles.left}>
-        <Text style={styles.time}>{time}</Text>
-        <Text style={styles.meta}>
-          {itemCount} item{itemCount === 1 ? '' : 's'} · {label}
-          {failed ? ' · Failed' : ''}
-        </Text>
-      </View>
+    <TouchableOpacity
+      style={[styles.row, isLast && styles.rowLast]}
+      onPress={onPress}
+      activeOpacity={0.6}
+    >
+      <Text style={styles.time}>{time}</Text>
+
+      <Text style={styles.meta} numberOfLines={1}>
+        {itemCount} item{itemCount === 1 ? '' : 's'} · {label}
+        {failed ? ' · Failed' : ''}
+      </Text>
 
       <Text style={[styles.total, failed && styles.totalFailed]}>
         {formatKsh(order.total)}
       </Text>
+
+      <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
@@ -199,62 +262,112 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
 
-  sectionHeader: {
+  dayCardTop: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    marginTop: spacing.lg,
+  },
+  cardEnd: {
+    backgroundColor: colors.surface,
+    borderBottomLeftRadius: radii.lg,
+    borderBottomRightRadius: radii.lg,
+    height: spacing.sm,
+    marginBottom: spacing.xs,
+    ...shadows.sm,
+  },
+
+  dayRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.sm,
+    alignItems: 'center',
+    marginBottom: spacing.xs,
   },
-  sectionTitle: {
+  dayLabel: {
     ...typography.caption,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  sectionMeta: {
+  dayRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  dayCount: {
     ...typography.caption,
     color: colors.textMuted,
   },
 
-  sectionFooter: {
+  dayTotal: {
+    ...typography.h1,
+    color: colors.text,
+    fontSize: 32,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+  },
+
+  barTrack: {
+    flexDirection: 'row',
+    height: 6,
+    borderRadius: 3,
+    overflow: 'hidden',
+    backgroundColor: colors.border,
+    marginBottom: spacing.md,
+  },
+  barFill: { backgroundColor: colors.primary },
+  barRest: { backgroundColor: colors.mpesaRed },
+
+  splitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  splitItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    gap: spacing.xs,
   },
-  footerText: {
+  splitDot: { width: 8, height: 8, borderRadius: 4 },
+  splitLabel: {
     ...typography.tiny,
     color: colors.textMuted,
   },
-  footerDot: {
+  splitValue: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  splitHint: {
     ...typography.tiny,
     color: colors.textMuted,
+    marginTop: spacing.sm,
   },
 
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: colors.surface,
-    borderRadius: radii.md,
-    paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xs,
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
     gap: spacing.md,
   },
-  left: { flex: 1, minWidth: 0 },
+  rowLast: {},
   time: {
     ...typography.bodyMedium,
     color: colors.text,
     fontWeight: '500',
+    width: 48,
   },
   meta: {
     ...typography.tiny,
     color: colors.textMuted,
-    marginTop: 2,
+    flex: 1,
   },
   total: {
     ...typography.bodyMedium,

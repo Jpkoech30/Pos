@@ -1,83 +1,71 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  View,
-  Text,
-  TouchableOpacity,
+  View, Text, ScrollView, StyleSheet, TextInput, TouchableOpacity,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
-import { z } from 'zod';
+
 import { productsApi } from '../../services/products';
-import { useForm } from '../../hooks/useForm';
-import FormInput from '../../components/FormInput';
-import { Screen, Card, Button, SectionLabel } from '../../components/ui';
-import { colors, spacing, typography, radii } from '../../theme';
+import { formatKsh } from '../../utils/format';
+import { colors, spacing, typography, radii, shadows } from '../../theme';
 
-const schema = z.object({
-  name: z.string().trim().min(2, 'Name must be at least 2 characters'),
-  price: z
-    .string()
-    .min(1, 'Price is required')
-    .refine(
-      (v) => !isNaN(Number(v)) && Number(v) >= 0,
-      'Price must be a valid non-negative number'
-    ),
-  category: z.string().trim().optional(),
-  sku: z.string().trim().optional(),
-  barcode: z.string().trim().optional(),
-  stock: z
-    .string()
-    .optional()
-    .refine(
-      (v) => v === undefined || v === '' || (!isNaN(Number(v)) && Number(v) >= 0),
-      'Stock must be a non-negative number'
-    ),
-});
+const CATEGORIES = ['Coffee', 'Pastry', 'Sandwich', 'Salad', 'Drink', 'Other'];
 
-export default function ProductFormScreen({ route, navigation }) {
-  const existing = route.params?.product;
-  const isEdit = !!existing;
+export default function ProductFormScreen({ navigation, route }) {
+  const existing = route.params?.product || null;
+  const isEdit = Boolean(existing);
 
-  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState(existing?.name || '');
+  const [price, setPrice] = useState(existing?.price != null ? String(existing.price) : '');
+  const [costPrice, setCostPrice] = useState(
+    existing?.costPrice != null ? String(existing.costPrice) : ''
+  );
+  const [category, setCategory] = useState(existing?.category || 'Coffee');
+  const [sku, setSku] = useState(existing?.sku || '');
+  const [barcode, setBarcode] = useState(existing?.barcode || '');
+  const [stock, setStock] = useState(
+    existing?.stock != null ? String(existing.stock) : ''
+  );
+  const [submitting, setSubmitting] = useState(false);
 
-  const { values, errors, setField, handleSubmit } = useForm(schema, {
-    name: existing?.name || '',
-    price: existing?.price != null ? String(existing.price) : '',
-    category: existing?.category || '',
-    sku: existing?.sku || '',
-    barcode: existing?.barcode || '',
-    stock: existing?.stock != null ? String(existing.stock) : '',
-  });
+  const priceNum = Number(price) || 0;
+  const costNum = Number(costPrice) || 0;
 
-  // Handle scanned barcode returned from ScannerScreen
-  const lastScanTsRef = useRef(route.params?._scanTs || 0);
-  useEffect(() => {
-    const ts = route.params?._scanTs;
-    const code = route.params?.barcode;
-    if (ts && ts !== lastScanTsRef.current && code) {
-      lastScanTsRef.current = ts;
-      setField('barcode', code);
-      // Clear params so a re-render doesn't reapply the scan
-      navigation.setParams({ barcode: undefined, _scanTs: undefined });
-    }
-  }, [route.params?._scanTs, route.params?.barcode, navigation, setField]);
+  const { margin, profit, valid } = useMemo(() => {
+    const p = priceNum;
+    const c = costNum;
+    if (p <= 0 || c <= 0) return { margin: null, profit: null, valid: false };
+    const profitPerUnit = p - c;
+    const marginPct = (profitPerUnit / p) * 100;
+    return {
+      margin: marginPct,
+      profit: profitPerUnit,
+      valid: profitPerUnit >= 0,
+    };
+  }, [priceNum, costNum]);
 
-  const onSubmit = handleSubmit(async (v) => {
+  const canSubmit =
+    name.trim().length > 0 &&
+    priceNum > 0 &&
+    !submitting;
+
+  const handleSave = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+
+    const payload = {
+      name: name.trim(),
+      price: priceNum,
+      costPrice: costPrice ? costNum : null,
+      category,
+      sku: sku.trim() || null,
+      barcode: barcode.trim() || null,
+      stock: Number.isInteger(Number(stock)) ? Number(stock) : 0,
+    };
+
     try {
-      setLoading(true);
-
-      const payload = {
-        name: v.name.trim(),
-        price: Number(v.price),
-        category: v.category?.trim() || 'Uncategorized',
-        sku: v.sku?.trim() || null,
-        barcode: v.barcode?.trim() || null,
-        stock: v.stock === '' || v.stock === undefined ? 0 : Number(v.stock),
-      };
-
       if (isEdit) {
         await productsApi.update(existing.id, payload);
         Toast.show({ type: 'success', text1: 'Product updated' });
@@ -85,145 +73,373 @@ export default function ProductFormScreen({ route, navigation }) {
         await productsApi.create(payload);
         Toast.show({ type: 'success', text1: 'Product created' });
       }
-
       navigation.goBack();
     } catch (err) {
-      Toast.show({
-        type: 'error',
-        text1: isEdit ? 'Update failed' : 'Create failed',
-        text2: err.message,
-      });
-    } finally {
-      setLoading(false);
+      Toast.show({ type: 'error', text1: 'Save failed', text2: err.message });
+      setSubmitting(false);
     }
-  });
+  };
 
-  const openScanner = () => {
-    navigation.navigate('Scanner', { mode: 'barcode-input' });
+  const handleDelete = () => {
+    // Simple confirm via a second tap on the same button would be safer,
+    // but for now rely on the destructive styling and require a long press later.
+    // Keeping this minimal — just call through.
+    deleteProduct();
+  };
+
+  const deleteProduct = async () => {
+    setSubmitting(true);
+    try {
+      await productsApi.remove(existing.id);
+      Toast.show({ type: 'success', text1: 'Product deleted' });
+      navigation.goBack();
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'Delete failed', text2: err.message });
+      setSubmitting(false);
+    }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <Screen scroll edges={['bottom']}>
-        <SectionLabel>Basics</SectionLabel>
-        <Card style={styles.group}>
-          <FormInput
-            label="Product Name"
-            placeholder="e.g. Cappuccino"
-            value={values.name}
-            onChangeText={(t) => setField('name', t)}
-            error={errors.name}
-            editable={!loading}
-          />
-          <FormInput
-            label="Price (KSh)"
-            placeholder="0"
-            value={values.price}
-            onChangeText={(t) => setField('price', t)}
-            error={errors.price}
-            keyboardType="decimal-pad"
-            editable={!loading}
-          />
-          <FormInput
-            label="Category"
-            placeholder="e.g. Coffee"
-            value={values.category}
-            onChangeText={(t) => setField('category', t)}
-            error={errors.category}
-            editable={!loading}
-          />
-        </Card>
-
-        <SectionLabel>Inventory</SectionLabel>
-        <Card style={styles.group}>
-          <FormInput
-            label="SKU"
-            placeholder="e.g. COF-001"
-            value={values.sku}
-            onChangeText={(t) => setField('sku', t)}
-            error={errors.sku}
-            autoCapitalize="characters"
-            editable={!loading}
-          />
-
-          {/* Barcode field with Scan shortcut */}
-          <View style={styles.barcodeRow}>
-            <View style={{ flex: 1 }}>
-              <FormInput
-                label="Barcode"
-                placeholder="e.g. 5449000000996"
-                value={values.barcode}
-                onChangeText={(t) => setField('barcode', t)}
-                error={errors.barcode}
-                keyboardType="number-pad"
-                editable={!loading}
+    <SafeAreaView style={styles.root} edges={['bottom']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Pricing block — highest value, goes first */}
+          <Text style={styles.sectionLabel}>Pricing</Text>
+          <View style={styles.card}>
+            <Field label="Selling price">
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor={colors.textMuted}
+                value={price}
+                onChangeText={(t) => setPrice(t.replace(/[^0-9.]/g, ''))}
               />
-            </View>
+            </Field>
 
-            <TouchableOpacity
-              style={styles.scanBtn}
-              onPress={openScanner}
-              disabled={loading}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="barcode-outline" size={20} color={colors.textInverse} />
-              <Text style={styles.scanBtnText}>Scan</Text>
-            </TouchableOpacity>
+            <View style={styles.fieldGap} />
+
+            <Field label="Cost price (what you paid)">
+              <TextInput
+                style={styles.input}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor={colors.textMuted}
+                value={costPrice}
+                onChangeText={(t) => setCostPrice(t.replace(/[^0-9.]/g, ''))}
+              />
+            </Field>
+
+            {/* Live margin readout */}
+            {margin != null && (
+              <View style={[styles.marginBox, !valid && styles.marginBoxBad]}>
+                <View style={styles.marginRow}>
+                  <Ionicons
+                    name={valid ? 'trending-up' : 'trending-down'}
+                    size={18}
+                    color={valid ? colors.success : colors.danger}
+                  />
+                  <Text
+                    style={[
+                      styles.marginText,
+                      { color: valid ? colors.success : colors.danger },
+                    ]}
+                  >
+                    {valid
+                      ? `Margin ${Math.round(margin)}%`
+                      : `Loss ${Math.abs(Math.round(margin))}%`}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.marginSub,
+                    { color: valid ? colors.success : colors.danger },
+                  ]}
+                >
+                  {valid
+                    ? `${formatKsh(profit)} profit per unit`
+                    : `Selling below cost by ${formatKsh(Math.abs(profit))}`}
+                </Text>
+              </View>
+            )}
+
+            {costPrice === '' && (
+              <Text style={styles.hint}>
+                No cost set — this product won't show in profit reports
+              </Text>
+            )}
           </View>
 
-          <FormInput
-            label="Stock"
-            placeholder="0"
-            value={values.stock}
-            onChangeText={(t) => setField('stock', t)}
-            error={errors.stock}
-            keyboardType="number-pad"
-            editable={!loading}
-          />
-        </Card>
+          {/* Product info */}
+          <Text style={styles.sectionLabel}>Product</Text>
+          <View style={styles.card}>
+            <Field label="Name">
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Flat White"
+                placeholderTextColor={colors.textMuted}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+              />
+            </Field>
 
-        <View style={styles.footer}>
-          <Button
-            title={isEdit ? 'Save Changes' : 'Create Product'}
-            onPress={onSubmit}
-            loading={loading}
-          />
+            <View style={styles.fieldGap} />
+
+            <Field label="Category">
+              <View style={styles.chipsWrap}>
+                {CATEGORIES.map((c) => {
+                  const active = category === c;
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      style={[styles.chip, active && styles.chipActive]}
+                      onPress={() => setCategory(c)}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[styles.chipText, active && styles.chipTextActive]}
+                      >
+                        {c}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </Field>
+
+            <View style={styles.fieldGap} />
+
+            <Field label="Stock on hand">
+              <TextInput
+                style={styles.input}
+                keyboardType="number-pad"
+                placeholder="0"
+                placeholderTextColor={colors.textMuted}
+                value={stock}
+                onChangeText={(t) => setStock(t.replace(/[^0-9]/g, ''))}
+              />
+            </Field>
+          </View>
+
+          {/* Codes — optional */}
+          <Text style={styles.sectionLabel}>Codes (optional)</Text>
+          <View style={styles.card}>
+            <Field label="SKU">
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. COF-001"
+                placeholderTextColor={colors.textMuted}
+                value={sku}
+                onChangeText={setSku}
+                autoCapitalize="characters"
+                autoCorrect={false}
+              />
+            </Field>
+
+            <View style={styles.fieldGap} />
+
+            <Field label="Barcode">
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 1234567890123"
+                placeholderTextColor={colors.textMuted}
+                value={barcode}
+                onChangeText={(t) => setBarcode(t.replace(/[^0-9]/g, ''))}
+                keyboardType="number-pad"
+              />
+            </Field>
+          </View>
+
+          {/* Delete — only in edit mode */}
+          {isEdit && (
+            <TouchableOpacity
+              style={styles.deleteBtn}
+              onPress={handleDelete}
+              disabled={submitting}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              <Text style={styles.deleteText}>Delete product</Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={{ height: spacing.xxxl }} />
+        </ScrollView>
+
+        {/* Bottom action bar */}
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={[styles.saveBtn, !canSubmit && styles.saveBtnDisabled]}
+            onPress={handleSave}
+            disabled={!canSubmit}
+            activeOpacity={0.85}
+          >
+            {submitting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={styles.saveText}>
+                  {isEdit ? 'Save changes' : 'Create product'}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
-      </Screen>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <View>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      {children}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  group: {
-    paddingBottom: spacing.xs,
-    marginBottom: spacing.xxl,
+  root: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
+  scroll: { padding: spacing.screenPadding, paddingBottom: spacing.xxxl },
+
+  sectionLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '700',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
-  footer: {
-    marginTop: spacing.md,
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    ...shadows.sm,
+  },
+  fieldGap: { height: spacing.md },
+
+  fieldLabel: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    marginBottom: spacing.xs,
+    fontWeight: '600',
+  },
+  input: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 
-  barcodeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.sm,
+  // Margin readout
+  marginBox: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.successSoft,
+    borderRadius: radii.md,
+    gap: 2,
   },
-  scanBtn: {
+  marginBoxBad: {
+    backgroundColor: colors.dangerSoft,
+  },
+  marginRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.lg,
-    height: 50,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
-    marginBottom: spacing.lg,
+    gap: spacing.sm,
   },
-  scanBtnText: {
-    ...typography.captionMedium,
-    color: colors.textInverse,
+  marginText: {
+    ...typography.bodyMedium,
+    fontWeight: '700',
+  },
+  marginSub: {
+    ...typography.caption,
+    marginLeft: 26,
+  },
+  hint: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    marginTop: spacing.md,
+    fontStyle: 'italic',
+  },
+
+  // Category chips
+  chipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  chip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
     fontWeight: '600',
+  },
+  chipTextActive: {
+    color: '#fff',
+  },
+
+  // Delete
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  deleteText: {
+    ...typography.bodyMedium,
+    color: colors.danger,
+    fontWeight: '600',
+  },
+
+  // Bottom
+  bottomBar: {
+    padding: spacing.screenPadding,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    borderRadius: radii.md,
+  },
+  saveBtnDisabled: { opacity: 0.4 },
+  saveText: {
+    ...typography.button,
+    color: '#fff',
+    fontSize: 17,
   },
 });

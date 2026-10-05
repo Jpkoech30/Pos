@@ -18,6 +18,7 @@ import { colors, spacing, typography, radii, shadows } from '../../theme';
 
 const HINT_KEY = 'products_onboarding_dismissed';
 const LOW_STOCK_THRESHOLD = 10;
+const QUICK_ADD_MAX = 20;
 
 const DEFAULT_FILTERS = { category: null, stock: 'all', margin: 'all' };
 
@@ -82,6 +83,8 @@ export default function ProductsScreen({ navigation }) {
     setView('catalog');
   };
 
+  const goToAdd = () => navigation.navigate('ProductForm');
+
   if (loading && products.length === 0) {
     return (
       <SafeAreaView style={styles.root} edges={['top']}>
@@ -92,17 +95,22 @@ export default function ProductsScreen({ navigation }) {
     );
   }
 
+  const showQuickAdd = products.length > 0 && products.length < QUICK_ADD_MAX;
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Products</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => navigation.navigate('ProductForm')}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="add" size={24} color="#fff" />
-        </TouchableOpacity>
+        {!showQuickAdd && (
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={goToAdd}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="add" size={20} color="#fff" />
+            <Text style={styles.addBtnText}>Add</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.segment}>
@@ -126,6 +134,25 @@ export default function ProductsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
+      {showQuickAdd && (
+        <TouchableOpacity
+          style={styles.quickAdd}
+          onPress={goToAdd}
+          activeOpacity={0.85}
+        >
+          <View style={styles.quickAddIcon}>
+            <Ionicons name="add" size={24} color="#fff" />
+          </View>
+          <View style={styles.quickAddBody}>
+            <Text style={styles.quickAddTitle}>Add a product</Text>
+            <Text style={styles.quickAddSub}>
+              Search 200+ Kenyan products or scan a barcode
+            </Text>
+          </View>
+          <Ionicons name="arrow-forward" size={20} color="#fff" />
+        </TouchableOpacity>
+      )}
+
       {view === 'catalog' ? (
         <CatalogView
           products={products}
@@ -137,6 +164,7 @@ export default function ProductsScreen({ navigation }) {
           setFilters={setFilters}
           sort={sort}
           setSort={setSort}
+          onAdd={goToAdd}
         />
       ) : (
         <StockView
@@ -164,7 +192,7 @@ export default function ProductsScreen({ navigation }) {
 // ─────────────────────────────────────────────
 function CatalogView({
   products, navigation, refreshing, onRefresh, onStockPress,
-  filters, setFilters, sort, setSort,
+  filters, setFilters, sort, setSort, onAdd,
 }) {
   const [search, setSearch] = useState('');
   const [showHint, setShowHint] = useState(false);
@@ -283,23 +311,63 @@ function CatalogView({
 
   if (products.length === 0) {
     return (
-      <View style={styles.emptyHero}>
-        <View style={styles.emptyIcon}>
-          <Ionicons name="storefront-outline" size={48} color={colors.primary} />
+      <ScrollView contentContainerStyle={styles.emptyScroll}>
+        <View style={styles.emptyHero}>
+          <View style={styles.emptyIcon}>
+            <Ionicons name="storefront-outline" size={48} color={colors.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>Let's stock your shop</Text>
+          <Text style={styles.emptySub}>
+            Add your first product and you're ready to sell. We've already pre-loaded
+            200+ common Kenyan products to speed this up.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.emptyPrimaryBtn}
+            onPress={onAdd}
+            activeOpacity={0.85}
+          >
+            <View style={styles.emptyBtnIcon}>
+              <Ionicons name="add" size={22} color="#fff" />
+            </View>
+            <View style={styles.emptyBtnBody}>
+              <Text style={styles.emptyBtnTitle}>Add your first product</Text>
+              <Text style={styles.emptyBtnSub}>
+                Search the catalog or scan a barcode
+              </Text>
+            </View>
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+
+          <View style={styles.emptyDivider}>
+            <View style={styles.emptyDividerLine} />
+            <Text style={styles.emptyDividerText}>Popular right now</Text>
+            <View style={styles.emptyDividerLine} />
+          </View>
+
+          <View style={styles.emptyTips}>
+            <Text style={styles.emptyTipsTitle}>Tips for getting started</Text>
+            <View style={styles.emptyTipRow}>
+              <Ionicons name="sparkles" size={16} color={colors.primary} />
+              <Text style={styles.emptyTipText}>
+                Type "Fresh Fri" or "Omo" — the catalog fills in the rest
+              </Text>
+            </View>
+            <View style={styles.emptyTipRow}>
+              <Ionicons name="barcode-outline" size={16} color={colors.primary} />
+              <Text style={styles.emptyTipText}>
+                Scan any barcode to add a product with one tap
+              </Text>
+            </View>
+            <View style={styles.emptyTipRow}>
+              <Ionicons name="trending-up" size={16} color={colors.primary} />
+              <Text style={styles.emptyTipText}>
+                Add a cost price to unlock profit reports
+              </Text>
+            </View>
+          </View>
         </View>
-        <Text style={styles.emptyTitle}>Let's stock your shop</Text>
-        <Text style={styles.emptySub}>
-          Add your first product. We've pre-loaded 200+ common Kenyan products.
-        </Text>
-        <TouchableOpacity
-          style={styles.emptyPrimaryBtn}
-          onPress={() => navigation.navigate('ProductForm')}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="search" size={20} color="#fff" />
-          <Text style={styles.emptyBtnTitle}>Search 200+ products</Text>
-        </TouchableOpacity>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -355,7 +423,9 @@ function CatalogView({
           <View style={styles.hintBody}>
             <Text style={styles.hintTitle}>Adding products is easy</Text>
             <Text style={styles.hintText}>
-              Tap + and type a name. Tap <Text style={{ fontWeight: '700' }}>+ Stock</Text> to update inventory. Long-press to select multiple.
+              Tap <Text style={{ fontWeight: '700' }}>Add</Text> and start typing.
+              Tap <Text style={{ fontWeight: '700' }}>+ Stock</Text> to update inventory.
+              Long-press a row to select multiple.
             </Text>
           </View>
           <TouchableOpacity onPress={dismissHint} hitSlop={10}>
@@ -859,13 +929,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.screenPadding,
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
+    minHeight: 60,
   },
   headerTitle: { ...typography.h2, color: colors.text, flex: 1 },
+
   addBtn: {
-    width: 44, height: 44, borderRadius: radii.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
     backgroundColor: colors.primary,
-    alignItems: 'center', justifyContent: 'center',
     ...shadows.sm,
+  },
+  addBtnText: {
+    ...typography.button,
+    color: '#fff',
+    fontSize: 15,
   },
 
   segment: {
@@ -891,6 +972,38 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   segmentTextActive: { color: '#fff' },
+
+  quickAdd: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.screenPadding,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radii.lg,
+    backgroundColor: colors.primary,
+    ...shadows.md,
+  },
+  quickAddIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickAddBody: { flex: 1 },
+  quickAddTitle: {
+    ...typography.bodyMedium,
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  quickAddSub: {
+    ...typography.tiny,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
+  },
 
   selectionBar: {
     flexDirection: 'row',
@@ -1014,9 +1127,17 @@ const styles = StyleSheet.create({
   },
   bulkDeleteText: { ...typography.button, color: '#fff', fontSize: 16 },
 
+  emptyScroll: {
+    padding: spacing.screenPadding,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxxl,
+    flexGrow: 1,
+  },
   emptyHero: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
-    paddingHorizontal: spacing.screenPadding,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    paddingTop: spacing.xl,
   },
   emptyIcon: {
     width: 88, height: 88, borderRadius: 44,
@@ -1028,18 +1149,84 @@ const styles = StyleSheet.create({
   emptySub: {
     ...typography.body, color: colors.textSecondary,
     textAlign: 'center', marginTop: spacing.sm,
-    maxWidth: 320, lineHeight: 22, marginBottom: spacing.xxl,
+    maxWidth: 340, lineHeight: 22, marginBottom: spacing.xxl,
   },
   emptyPrimaryBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
     backgroundColor: colors.primary,
     borderRadius: radii.lg,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
+    padding: spacing.lg,
+    alignSelf: 'stretch',
     ...shadows.md,
   },
-  emptyBtnTitle: { ...typography.bodyMedium, color: '#fff', fontWeight: '700' },
+  emptyBtnIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyBtnBody: { flex: 1 },
+  emptyBtnTitle: {
+    ...typography.bodyMedium,
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  emptyBtnSub: {
+    ...typography.tiny,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 2,
+  },
+
+  emptyDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginTop: spacing.xxl,
+    marginBottom: spacing.lg,
+    alignSelf: 'stretch',
+  },
+  emptyDividerLine: {
+    flex: 1, height: 1, backgroundColor: colors.border,
+  },
+  emptyDividerText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '700',
+  },
+
+  emptyTips: {
+    alignSelf: 'stretch',
+    padding: spacing.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    gap: spacing.md,
+  },
+  emptyTipsTitle: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '700',
+    marginBottom: spacing.xs,
+  },
+  emptyTipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  emptyTipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
+    lineHeight: 18,
+  },
 
   stockScroll: { flex: 1 },
   stockScrollContent: {
@@ -1096,9 +1283,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  activitySection: {
-    marginBottom: spacing.md,
-  },
+  activitySection: { marginBottom: spacing.md },
   activitySectionLabel: {
     ...typography.tiny,
     color: colors.textMuted,
@@ -1117,19 +1302,13 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     marginBottom: spacing.xs,
   },
-  activityDot: {
-    width: 8, height: 8, borderRadius: 4,
-  },
+  activityDot: { width: 8, height: 8, borderRadius: 4 },
   activityBody: { flex: 1, minWidth: 0 },
   activityName: {
-    ...typography.caption,
-    color: colors.text,
-    fontWeight: '600',
+    ...typography.caption, color: colors.text, fontWeight: '600',
   },
   activityMeta: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    marginTop: 1,
+    ...typography.tiny, color: colors.textMuted, marginTop: 1,
   },
 
   subToggle: {
@@ -1156,9 +1335,7 @@ const styles = StyleSheet.create({
   },
   subToggleTextActive: { color: '#fff' },
 
-  supplierGroup: {
-    marginBottom: spacing.md,
-  },
+  supplierGroup: { marginBottom: spacing.md },
   supplierHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1176,29 +1353,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   supplierName: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    fontWeight: '700',
+    ...typography.bodyMedium, color: colors.text, fontWeight: '700',
   },
   supplierMeta: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    marginTop: 2,
+    ...typography.tiny, color: colors.textMuted, marginTop: 2,
   },
   supplierBadge: {
-    minWidth: 24,
-    height: 24,
-    paddingHorizontal: 6,
+    minWidth: 24, height: 24, paddingHorizontal: 6,
     borderRadius: 12,
     backgroundColor: colors.warningSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   supplierBadgeText: {
-    ...typography.tiny,
-    color: colors.warning,
-    fontWeight: '800',
-    fontSize: 11,
+    ...typography.tiny, color: colors.warning,
+    fontWeight: '800', fontSize: 11,
   },
   supplierItems: {
     paddingLeft: spacing.md,
@@ -1217,9 +1385,7 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   stockIndicator: {
-    width: 4,
-    height: 44,
-    borderRadius: 2,
+    width: 4, height: 44, borderRadius: 2,
   },
   stockRowBody: {
     flex: 1, minWidth: 0, gap: 2,
@@ -1227,18 +1393,11 @@ const styles = StyleSheet.create({
   stockRowName: {
     ...typography.bodyMedium, color: colors.text, fontWeight: '600',
   },
-  stockRowStatus: {
-    ...typography.tiny, fontWeight: '700',
-  },
-  stockRowCategory: {
-    ...typography.tiny, color: colors.textMuted,
-  },
+  stockRowStatus: { ...typography.tiny, fontWeight: '700' },
+  stockRowCategory: { ...typography.tiny, color: colors.textMuted },
   restockBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     borderRadius: radii.md,
     backgroundColor: colors.primary,
   },

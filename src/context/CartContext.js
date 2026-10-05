@@ -1,4 +1,3 @@
-
 import React, {
   createContext,
   useContext,
@@ -12,7 +11,7 @@ import { useAuth } from './AuthContext';
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-  const { user } = useAuth();
+  const { user, shop } = useAuth();
   const [items, setItems] = useState([]);
   const prevUserRef = useRef(null);
 
@@ -56,16 +55,45 @@ export function CartProvider({ children }) {
 
   const clearCart = () => setItems([]);
 
-  const { subtotal, tax, total, count } = useMemo(() => {
-    const sub = items.reduce((s, i) => s + i.price * i.quantity, 0);
-    const t = +(sub * 0.08).toFixed(2);
+  // Tax math mirrors orderDb.create in pos-api/src/db/orders.js.
+  // If the server formula changes, this must change with it.
+  //
+  // vat-registered + tax-inclusive (the Kenyan default):
+  //   the shelf price already includes VAT, so total = sum of prices
+  //   and we back the VAT portion out of the total.
+  //
+  // vat-registered + tax-exclusive:
+  //   prices are pre-tax, VAT is added on top.
+  //
+  // non-vat shops (including TOT-only shops):
+  //   vatRate = 0, so total = subtotal, no tax shown to the customer.
+  const totals = useMemo(() => {
+    const rawSum = items.reduce((s, i) => s + i.price * i.quantity, 0);
+
+    const vatRegistered = shop?.vatRegistered === true;
+    const vatRate = vatRegistered ? Number(shop?.vatRate ?? 16) : 0;
+    const taxInclusive = shop?.pricesIncludeVat !== false;
+
+    let net, vat, gross;
+    if (taxInclusive && vatRate > 0) {
+      gross = +rawSum.toFixed(2);
+      vat = +(gross * vatRate / (100 + vatRate)).toFixed(2);
+      net = +(gross - vat).toFixed(2);
+    } else {
+      net = +rawSum.toFixed(2);
+      vat = +(net * vatRate / 100).toFixed(2);
+      gross = +(net + vat).toFixed(2);
+    }
+
     return {
-      subtotal: +sub.toFixed(2),
-      tax: t,
-      total: +(sub + t).toFixed(2),
+      subtotal: net,
+      tax: vat,
+      total: gross,
       count: items.reduce((s, i) => s + i.quantity, 0),
+      vatRegistered,
+      taxInclusive,
     };
-  }, [items]);
+  }, [items, shop]);
 
   return (
     <CartContext.Provider
@@ -75,10 +103,7 @@ export function CartProvider({ children }) {
         updateQty,
         removeItem,
         clearCart,
-        subtotal,
-        tax,
-        total,
-        count,
+        ...totals,
       }}
     >
       {children}

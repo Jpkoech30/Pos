@@ -16,7 +16,6 @@ import { colors, spacing, typography, radii, shadows } from '../../theme';
 
 const CATEGORIES = ['Grocery', 'Drinks', 'Snacks', 'Personal care', 'Household', 'Other'];
 
-// Plain-language margin feedback.
 function marginLabel(pct) {
   if (pct < 0) return { text: 'Loss — selling below cost', tone: 'danger' };
   if (pct < 5) return { text: 'Very thin margin', tone: 'warn' };
@@ -38,19 +37,22 @@ export default function ProductFormScreen({ navigation, route }) {
     existing?.costPrice != null ? String(existing.costPrice) : ''
   );
   const [category, setCategory] = useState(existing?.category || 'Grocery');
+  const [supplier, setSupplier] = useState(existing?.supplier || '');
+  const [manufacturer, setManufacturer] = useState(existing?.manufacturer || '');
   const [sku, setSku] = useState(existing?.sku || '');
   const [barcode, setBarcode] = useState(existing?.barcode || '');
   const [stock, setStock] = useState(
     existing?.stock != null ? String(existing.stock) : ''
   );
   const [submitting, setSubmitting] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(
+    Boolean(existing?.sku || existing?.barcode || existing?.supplier || existing?.manufacturer)
+  );
 
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimeoutRef = useRef(null);
 
-  // Handle a scanned barcode arriving via route params
   useEffect(() => {
     const scanned = route.params?.scannedBarcode;
     if (!scanned) return;
@@ -94,9 +96,7 @@ export default function ProductFormScreen({ navigation, route }) {
     barcodeStatus.state !== 'error' &&
     !submitting;
 
-  const handleScanBarcode = () => {
-    navigation.navigate('Scanner');
-  };
+  const handleScanBarcode = () => navigation.navigate('Scanner');
 
   const handleNameChange = (text) => {
     setName(text);
@@ -125,12 +125,14 @@ export default function ProductFormScreen({ navigation, route }) {
     if (item.suggestedPrice != null) setPrice(String(item.suggestedPrice));
     if (item.suggestedCost != null) setCostPrice(String(item.suggestedCost));
     if (item.typicalBarcode && !barcode) setBarcode(item.typicalBarcode);
+    if (item.supplier) setSupplier(item.supplier);
+    if (item.manufacturer) setManufacturer(item.manufacturer);
     setShowSuggestions(false);
     setSuggestions([]);
     Toast.show({
       type: 'success',
       text1: 'Filled from catalog',
-      text2: 'Adjust as needed',
+      text2: item.supplier ? `Supplier: ${item.supplier}` : 'Adjust as needed',
     });
   };
 
@@ -143,6 +145,8 @@ export default function ProductFormScreen({ navigation, route }) {
       price: priceNum,
       costPrice: costPrice ? costNum : null,
       category,
+      supplier: supplier.trim() || null,
+      manufacturer: manufacturer.trim() || null,
       sku: sku.trim() || null,
       barcode: barcode ? cleanGtin(barcode) : null,
       stock: Number.isInteger(Number(stock)) ? Number(stock) : 0,
@@ -185,7 +189,6 @@ export default function ProductFormScreen({ navigation, route }) {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ─── Step 1: What are you selling? ─── */}
           <StepHeader n={1} title="What are you selling?" />
           <View style={styles.card}>
             <View>
@@ -268,7 +271,6 @@ export default function ProductFormScreen({ navigation, route }) {
             </View>
           </View>
 
-          {/* ─── Step 2: Set your prices ─── */}
           <StepHeader n={2} title="Set your prices" />
           <View style={styles.card}>
             <View>
@@ -377,7 +379,6 @@ export default function ProductFormScreen({ navigation, route }) {
             )}
           </View>
 
-          {/* ─── Step 3: Stock ─── */}
           <StepHeader n={3} title="How many do you have?" optional />
           <View style={styles.card}>
             <TextInput
@@ -393,7 +394,6 @@ export default function ProductFormScreen({ navigation, route }) {
             </Text>
           </View>
 
-          {/* ─── Advanced ─── */}
           <TouchableOpacity
             style={styles.advancedToggle}
             onPress={() => setShowAdvanced(!showAdvanced)}
@@ -405,12 +405,49 @@ export default function ProductFormScreen({ navigation, route }) {
               color={colors.textMuted}
             />
             <Text style={styles.advancedToggleText}>
-              Advanced {barcode || sku ? '(set)' : '(optional)'}
+              Advanced{' '}
+              {barcode || sku || supplier || manufacturer
+                ? '(set)'
+                : '(optional)'}
             </Text>
           </TouchableOpacity>
 
           {showAdvanced && (
             <View style={styles.card}>
+              <View>
+                <Text style={styles.fieldLabel}>Supplier</Text>
+                <Text style={styles.fieldHint}>
+                  Where you buy it — used to group your shopping list
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. New Paleah, Bidco Africa"
+                  placeholderTextColor={colors.textMuted}
+                  value={supplier}
+                  onChangeText={setSupplier}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={styles.gap} />
+
+              <View>
+                <Text style={styles.fieldLabel}>Manufacturer</Text>
+                <Text style={styles.fieldHint}>
+                  The brand's parent company — optional
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Unilever, Coca-Cola"
+                  placeholderTextColor={colors.textMuted}
+                  value={manufacturer}
+                  onChangeText={setManufacturer}
+                  autoCapitalize="words"
+                />
+              </View>
+
+              <View style={styles.gap} />
+
               <View>
                 <Text style={styles.fieldLabel}>Barcode (GTIN)</Text>
                 <Text style={styles.fieldHint}>
@@ -523,11 +560,8 @@ const styles = StyleSheet.create({
   scroll: { padding: spacing.screenPadding, paddingBottom: spacing.xxxl },
 
   stepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginTop: spacing.lg, marginBottom: spacing.sm,
   },
   stepNumber: {
     width: 22, height: 22, borderRadius: 11,
@@ -535,21 +569,13 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   stepNumberText: {
-    ...typography.tiny,
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 11,
+    ...typography.tiny, color: '#fff', fontWeight: '800', fontSize: 11,
   },
   stepTitle: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    fontWeight: '700',
-    flex: 1,
+    ...typography.bodyMedium, color: colors.text, fontWeight: '700', flex: 1,
   },
   stepOptional: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    fontStyle: 'italic',
+    ...typography.tiny, color: colors.textMuted, fontStyle: 'italic',
   },
 
   card: {
@@ -561,62 +587,43 @@ const styles = StyleSheet.create({
   gap: { height: spacing.lg },
 
   fieldLabel: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    fontWeight: '600',
-    marginBottom: 2,
+    ...typography.bodyMedium, color: colors.text,
+    fontWeight: '600', marginBottom: 2,
   },
   fieldHint: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    marginBottom: spacing.xs,
+    ...typography.tiny, color: colors.textMuted, marginBottom: spacing.xs,
   },
   input: {
-    ...typography.bodyMedium,
-    color: colors.text,
+    ...typography.bodyMedium, color: colors.text,
     backgroundColor: colors.background,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    borderRadius: radii.md, borderWidth: 1, borderColor: colors.border,
   },
   helperText: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    marginTop: spacing.sm,
-    fontStyle: 'italic',
+    ...typography.tiny, color: colors.textMuted,
+    marginTop: spacing.sm, fontStyle: 'italic',
   },
 
   suggestions: {
     marginTop: spacing.xs,
     backgroundColor: colors.surface,
     borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.primary,
+    borderWidth: 1, borderColor: colors.primary,
     overflow: 'hidden',
     ...shadows.sm,
   },
   suggestionsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     backgroundColor: colors.primarySoft,
   },
   suggestionsHeaderText: {
-    ...typography.tiny,
-    color: colors.primary,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    ...typography.tiny, color: colors.primary, fontWeight: '700',
+    textTransform: 'uppercase', letterSpacing: 0.5,
   },
   suggestion: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
     gap: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
@@ -624,22 +631,16 @@ const styles = StyleSheet.create({
   suggestionLast: { borderBottomWidth: 0 },
   suggestionBody: { flex: 1, minWidth: 0 },
   suggestionName: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    fontWeight: '600',
+    ...typography.bodyMedium, color: colors.text, fontWeight: '600',
   },
   suggestionMeta: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    marginTop: 2,
+    ...typography.tiny, color: colors.textMuted, marginTop: 2,
   },
 
   marginBox: {
-    marginTop: spacing.lg,
-    padding: spacing.md,
+    marginTop: spacing.lg, padding: spacing.md,
     backgroundColor: colors.successSoft,
-    borderRadius: radii.md,
-    gap: 2,
+    borderRadius: radii.md, gap: 2,
   },
   marginBoxWarn: { backgroundColor: colors.warningSoft },
   marginBoxDanger: { backgroundColor: colors.dangerSoft },
@@ -648,69 +649,50 @@ const styles = StyleSheet.create({
   marginSub: { ...typography.caption, marginLeft: 26 },
 
   infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    padding: spacing.sm,
-    backgroundColor: colors.background,
-    borderRadius: radii.sm,
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
+    marginTop: spacing.md, padding: spacing.sm,
+    backgroundColor: colors.background, borderRadius: radii.sm,
   },
   infoText: {
-    ...typography.tiny,
-    color: colors.textSecondary,
-    flex: 1,
-    lineHeight: 16,
+    ...typography.tiny, color: colors.textSecondary,
+    flex: 1, lineHeight: 16,
   },
 
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     borderRadius: radii.pill,
     backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1, borderColor: colors.border,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
   chipTextActive: { color: '#fff' },
 
   advancedToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xs,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginTop: spacing.xl, marginBottom: spacing.sm,
+    paddingVertical: spacing.sm, paddingHorizontal: spacing.xs,
   },
   advancedToggleText: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontWeight: '600',
+    ...typography.caption, color: colors.textMuted, fontWeight: '600',
   },
 
   barcodeRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
   barcodeInput: { flex: 1 },
   scanBtn: {
-    width: 52, height: 52,
-    borderRadius: radii.md,
+    width: 52, height: 52, borderRadius: radii.md,
     backgroundColor: colors.primary,
     alignItems: 'center', justifyContent: 'center',
     ...shadows.sm,
   },
   barcodeStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.sm,
+    flexDirection: 'row', alignItems: 'center',
+    gap: spacing.xs, marginTop: spacing.sm,
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    fontWeight: '600',
+    ...typography.tiny, color: colors.textMuted, fontWeight: '600',
   },
 
   bottomBar: {
@@ -720,13 +702,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radii.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, backgroundColor: colors.primary,
+    paddingVertical: spacing.lg, borderRadius: radii.md,
   },
   saveBtnDisabled: { opacity: 0.4 },
   saveText: { ...typography.button, color: '#fff', fontSize: 17 },

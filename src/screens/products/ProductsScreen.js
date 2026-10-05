@@ -159,6 +159,9 @@ export default function ProductsScreen({ navigation }) {
   );
 }
 
+// ─────────────────────────────────────────────
+// Catalog view
+// ─────────────────────────────────────────────
 function CatalogView({
   products, navigation, refreshing, onRefresh, onStockPress,
   filters, setFilters, sort, setSort,
@@ -457,6 +460,9 @@ function CatalogView({
   );
 }
 
+// ─────────────────────────────────────────────
+// Stock view
+// ─────────────────────────────────────────────
 function StockView({
   products, refreshing, onRefresh, onStockPress, onFilterTap, activityRefreshKey,
 }) {
@@ -466,6 +472,7 @@ function StockView({
     let totalValue = 0;
     let lowItems = [];
     let outItems = [];
+    const supplierMap = new Map();
 
     products.forEach((p) => {
       const stock = Number(p.stock);
@@ -474,10 +481,25 @@ function StockView({
       if (stock > 0) totalValue += cost * stock;
       if (stock <= 0) outItems.push(p);
       else if (stock < LOW_STOCK_THRESHOLD) lowItems.push(p);
+
+      const key = p.supplier || 'Unassigned';
+      if (!supplierMap.has(key)) supplierMap.set(key, []);
+      supplierMap.get(key).push(p);
     });
 
     lowItems.sort((a, b) => Number(a.stock) - Number(b.stock));
     outItems.sort((a, b) => a.name.localeCompare(b.name));
+
+    const supplierGroups = Array.from(supplierMap.entries())
+      .map(([name, items]) => {
+        const lowCount = items.filter((p) => {
+          const s = Number(p.stock);
+          return s > 0 && s < LOW_STOCK_THRESHOLD;
+        }).length;
+        const outCount = items.filter((p) => Number(p.stock) <= 0).length;
+        return { name, items, lowCount, outCount, needsAttention: lowCount + outCount };
+      })
+      .sort((a, b) => b.needsAttention - a.needsAttention || a.name.localeCompare(b.name));
 
     return {
       totalValue: +totalValue.toFixed(2),
@@ -486,6 +508,7 @@ function StockView({
       outCount: outItems.length,
       lowItems,
       outItems,
+      supplierGroups,
     };
   }, [products]);
 
@@ -585,6 +608,20 @@ function StockView({
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
+          style={[styles.subToggleBtn, subView === 'supplier' && styles.subToggleBtnActive]}
+          onPress={() => setSubView('supplier')}
+          activeOpacity={0.8}
+        >
+          <Text
+            style={[
+              styles.subToggleText,
+              subView === 'supplier' && styles.subToggleTextActive,
+            ]}
+          >
+            By supplier
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
           style={[styles.subToggleBtn, subView === 'all' && styles.subToggleBtnActive]}
           onPress={() => setSubView('all')}
           activeOpacity={0.8}
@@ -600,7 +637,15 @@ function StockView({
         </TouchableOpacity>
       </View>
 
-      {listData.length === 0 ? (
+      {subView === 'supplier' ? (
+        stats.supplierGroups.map((group) => (
+          <SupplierGroup
+            key={group.name}
+            group={group}
+            onRestock={onStockPress}
+          />
+        ))
+      ) : listData.length === 0 ? (
         <View style={styles.stockEmpty}>
           <Ionicons name="checkmark-circle" size={48} color={colors.success} />
           <Text style={styles.stockEmptyTitle}>Everything is stocked</Text>
@@ -664,6 +709,70 @@ function ActivitySection({ refreshKey }) {
           </View>
         </View>
       ))}
+    </View>
+  );
+}
+
+function SupplierGroup({ group, onRestock }) {
+  const [expanded, setExpanded] = useState(group.needsAttention > 0);
+
+  const sortedItems = useMemo(() => {
+    return [...group.items].sort((a, b) => {
+      const sa = Number(a.stock);
+      const sb = Number(b.stock);
+      const aUrgent = sa <= 0 || sa < LOW_STOCK_THRESHOLD;
+      const bUrgent = sb <= 0 || sb < LOW_STOCK_THRESHOLD;
+      if (aUrgent && !bUrgent) return -1;
+      if (!aUrgent && bUrgent) return 1;
+      if (aUrgent && bUrgent) return sa - sb;
+      return a.name.localeCompare(b.name);
+    });
+  }, [group.items]);
+
+  return (
+    <View style={styles.supplierGroup}>
+      <TouchableOpacity
+        style={styles.supplierHeader}
+        onPress={() => setExpanded(!expanded)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.supplierHeaderLeft}>
+          <Ionicons
+            name={expanded ? 'chevron-down' : 'chevron-forward'}
+            size={18}
+            color={colors.textMuted}
+          />
+          <View>
+            <Text style={styles.supplierName}>{group.name}</Text>
+            <Text style={styles.supplierMeta}>
+              {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
+              {group.needsAttention > 0
+                ? ` · ${group.needsAttention} need attention`
+                : ''}
+            </Text>
+          </View>
+        </View>
+
+        {group.needsAttention > 0 ? (
+          <View style={styles.supplierBadge}>
+            <Text style={styles.supplierBadgeText}>{group.needsAttention}</Text>
+          </View>
+        ) : (
+          <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+        )}
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={styles.supplierItems}>
+          {sortedItems.map((p) => (
+            <StockRow
+              key={p.id}
+              product={p}
+              onRestock={() => onRestock(p)}
+            />
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -932,7 +1041,6 @@ const styles = StyleSheet.create({
   },
   emptyBtnTitle: { ...typography.bodyMedium, color: '#fff', fontWeight: '700' },
 
-  // Stock view
   stockScroll: { flex: 1 },
   stockScrollContent: {
     paddingHorizontal: spacing.screenPadding,
@@ -988,7 +1096,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Activity
   activitySection: {
     marginBottom: spacing.md,
   },
@@ -1029,6 +1136,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.xs,
     marginBottom: spacing.md,
+    flexWrap: 'wrap',
   },
   subToggleBtn: {
     paddingHorizontal: spacing.md,
@@ -1047,6 +1155,55 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   subToggleTextActive: { color: '#fff' },
+
+  supplierGroup: {
+    marginBottom: spacing.md,
+  },
+  supplierHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    marginBottom: spacing.xs,
+  },
+  supplierHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+  },
+  supplierName: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  supplierMeta: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  supplierBadge: {
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: colors.warningSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  supplierBadgeText: {
+    ...typography.tiny,
+    color: colors.warning,
+    fontWeight: '800',
+    fontSize: 11,
+  },
+  supplierItems: {
+    paddingLeft: spacing.md,
+    gap: spacing.xs,
+  },
 
   stockRow: {
     flexDirection: 'row',

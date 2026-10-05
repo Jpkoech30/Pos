@@ -10,8 +10,8 @@ import { staffApi } from '../services/staff';
 import { useShift } from '../context/ShiftContext';
 import { colors, spacing, typography, radii } from '../theme';
 
-export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
-  const { staff: currentStaff, openShift, checkOut, lock } = useShift();
+export default function CheckInSheet({ visible, mode, onClose, onSuccess, onEndShift }) {
+  const { staff: currentStaff, openShift, lock } = useShift();
   const [pin, setPin] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -28,7 +28,6 @@ export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
     }
   }, [visible, mode]);
 
-  // Auto-submit when 4 digits entered
   useEffect(() => {
     if (mode === 'checkin' && pin.length === 4 && !submitting) {
       submitPin();
@@ -59,13 +58,11 @@ export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
     onClose();
   };
 
-  const handleEndShift = async () => {
-    // Commit 3 will replace this with the cash count + Z-report flow.
-    await checkOut();
+  const handleEndShift = () => {
     onClose();
+    if (onEndShift) onEndShift();
   };
 
-  // ── Check out mode — two-option menu ──
   if (mode === 'checkout') {
     return (
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -99,9 +96,7 @@ export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
               <Ionicons name="pause-circle-outline" size={20} color={colors.primary} />
               <View style={styles.btnBody}>
                 <Text style={styles.stepAwayText}>Step away</Text>
-                <Text style={styles.stepAwayHint}>
-                  Take a break. Shift stays open.
-                </Text>
+                <Text style={styles.stepAwayHint}>Take a break. Shift stays open.</Text>
               </View>
             </TouchableOpacity>
 
@@ -113,9 +108,7 @@ export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
               <Ionicons name="log-out-outline" size={20} color="#fff" />
               <View style={styles.btnBody}>
                 <Text style={styles.endShiftText}>End shift</Text>
-                <Text style={styles.endShiftHint}>
-                  Finish for the day. Cash count and report.
-                </Text>
+                <Text style={styles.endShiftHint}>Finish for the day. Cash count and report.</Text>
               </View>
             </TouchableOpacity>
 
@@ -128,7 +121,6 @@ export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
     );
   }
 
-  // ── Check in mode ──
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose}>
@@ -185,11 +177,7 @@ export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'flex-end',
-  },
+  backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   sheetWrap: { width: '100%' },
   sheet: {
     backgroundColor: colors.surface,
@@ -198,7 +186,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
   },
-
   header: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -206,12 +193,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   title: { ...typography.h3, color: colors.text },
-  subtitle: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-  },
-
+  subtitle: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
   pinInput: {
     ...typography.h1,
     color: colors.text,
@@ -226,106 +208,50 @@ const styles = StyleSheet.create({
     fontSize: 28,
   },
   pinInputError: { borderColor: colors.danger },
-
   statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, marginTop: spacing.md,
   },
   statusText: { ...typography.caption, color: colors.textMuted },
-
   errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    padding: spacing.sm,
-    backgroundColor: colors.dangerSoft,
-    borderRadius: radii.sm,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    marginTop: spacing.md, padding: spacing.sm,
+    backgroundColor: colors.dangerSoft, borderRadius: radii.sm,
   },
   errorText: { ...typography.caption, color: colors.danger, flex: 1 },
-
   helpText: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.lg,
-    fontStyle: 'italic',
+    ...typography.tiny, color: colors.textMuted,
+    textAlign: 'center', marginTop: spacing.lg, fontStyle: 'italic',
   },
-
   whoCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    backgroundColor: colors.background,
-    borderRadius: radii.md,
-    marginBottom: spacing.lg,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    padding: spacing.md, backgroundColor: colors.background,
+    borderRadius: radii.md, marginBottom: spacing.lg,
   },
   whoAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 44, height: 44, borderRadius: 22,
     backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   whoBody: { flex: 1 },
   whoName: { ...typography.bodyMedium, color: colors.text, fontWeight: '700' },
   whoRole: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-
   stepAwayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    marginBottom: spacing.sm,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.md,
+    borderRadius: radii.md, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.surface, marginBottom: spacing.sm,
   },
-  stepAwayText: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  stepAwayHint: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-
+  stepAwayText: { ...typography.bodyMedium, color: colors.text, fontWeight: '700' },
+  stepAwayHint: { ...typography.tiny, color: colors.textMuted, marginTop: 2 },
   endShiftBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    paddingVertical: spacing.md, paddingHorizontal: spacing.md,
+    borderRadius: radii.md, backgroundColor: colors.primary,
   },
-  endShiftText: {
-    ...typography.bodyMedium,
-    color: '#fff',
-    fontWeight: '700',
-  },
-  endShiftHint: {
-    ...typography.tiny,
-    color: '#fff',
-    opacity: 0.85,
-    marginTop: 2,
-  },
-
+  endShiftText: { ...typography.bodyMedium, color: '#fff', fontWeight: '700' },
+  endShiftHint: { ...typography.tiny, color: '#fff', opacity: 0.85, marginTop: 2 },
   btnBody: { flex: 1 },
-
-  cancelBtn: {
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
+  cancelBtn: { paddingVertical: spacing.md, alignItems: 'center', marginTop: spacing.sm },
   cancelText: { ...typography.bodyMedium, color: colors.textMuted },
 });

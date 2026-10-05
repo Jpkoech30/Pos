@@ -31,7 +31,6 @@ export default function SaleScreen({ navigation }) {
   const [sheetMode, setSheetMode] = useState(null);
   const [pendingIntent, setPendingIntent] = useState(null);
 
-  // Cart bar shows `total`, not `subtotal` — matches what Checkout will charge.
   const { items, addToCart, updateQty, removeItem, count, total } = useCart();
   const { staff, staffCount } = useShift();
 
@@ -122,6 +121,10 @@ export default function SaleScreen({ navigation }) {
     setSheetMode(null);
     setPendingIntent(null);
     if (wasPending) navigation.navigate('Checkout');
+  };
+
+  const handleEndShift = () => {
+    navigation.navigate('CloseShift');
   };
 
   const openShiftSheet = () => {
@@ -297,6 +300,7 @@ export default function SaleScreen({ navigation }) {
         mode={sheetMode || 'checkin'}
         onClose={handleSheetClose}
         onSuccess={handleSheetSuccess}
+        onEndShift={handleEndShift}
       />
       <LockOverlay />
     </SafeAreaView>

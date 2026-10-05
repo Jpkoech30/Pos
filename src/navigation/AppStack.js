@@ -12,6 +12,7 @@ import MpesaPaymentScreen from '../screens/sale/MpesaPaymentScreen';
 import CashPaymentScreen from '../screens/sale/CashPaymentScreen';
 import StkPushScreen from '../screens/sale/StkPushScreen';
 import ReceiptScreen from '../screens/sale/ReceiptScreen';
+import CloseShiftScreen from '../screens/sale/CloseShiftScreen';
 
 // --- Products ---
 import ProductsScreen from '../screens/products/ProductsScreen';
@@ -52,6 +53,7 @@ function SaleStackNavigator() {
       <SaleStack.Screen name="CashPayment" component={CashPaymentScreen} options={{ headerShown: false }} />
       <SaleStack.Screen name="StkPush" component={StkPushScreen} options={{ headerShown: false }} />
       <SaleStack.Screen name="Receipt" component={ReceiptScreen} options={{ headerShown: false, gestureEnabled: false }} />
+      <SaleStack.Screen name="CloseShift" component={CloseShiftScreen} options={{ headerShown: false, gestureEnabled: false }} />
     </SaleStack.Navigator>
   );
 }
@@ -104,6 +106,7 @@ const HIDDEN_TABBAR_ROUTES = [
   'MpesaPayment',
   'CashPayment',
   'StkPush',
+  'CloseShift',
 ];
 
 export default function AppStack() {

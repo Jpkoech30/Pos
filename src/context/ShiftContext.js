@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+} from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { setCurrentStaffId } from '../services/orders';
 import { staffApi } from '../services/staff';
@@ -31,7 +37,8 @@ export function ShiftProvider({ children }) {
     })();
   }, []);
 
-  // Fetch staff count so SaleScreen knows whether to enforce check-in
+  // Fetch active staff count — SaleScreen uses it to decide whether
+  // to enforce check-in before charging
   useEffect(() => {
     if (!user) {
       setStaffCount(0);
@@ -43,7 +50,7 @@ export function ShiftProvider({ children }) {
         const active = (data.staff || []).filter((s) => s.isActive).length;
         setStaffCount(active);
       } catch {
-        // Leave at 0 — default to allowing sales if we can't check
+        // On error, default to 0 — allows sales to go through
       }
     })();
   }, [user]);

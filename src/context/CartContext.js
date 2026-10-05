@@ -1,16 +1,27 @@
-import React, { createContext, useContext, useState, useMemo } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useRef } from 'react';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
+  const prevUserRef = useRef(null);
+
+  // Clear the cart when the user logs out
+  useEffect(() => {
+    if (!user && prevUserRef.current) {
+      setItems([]);
+    }
+    prevUserRef.current = user;
+  }, [user]);
 
   const addToCart = (product) => {
     setItems((prev) => {
       const existing = prev.find((i) => i.productId === product.id);
       if (existing) {
         return prev.map((i) =>
-          i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.productId === product.id ? { ...i, quantity: i.quantity + 1 } : i,
         );
       }
       return [
@@ -28,7 +39,7 @@ export function CartProvider({ children }) {
   const updateQty = (productId, quantity) => {
     if (quantity <= 0) return removeItem(productId);
     setItems((prev) =>
-      prev.map((i) => (i.productId === productId ? { ...i, quantity } : i))
+      prev.map((i) => (i.productId === productId ? { ...i, quantity } : i)),
     );
   };
 

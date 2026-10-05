@@ -12,11 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { staffApi } from '../../services/staff';
 import { colors, spacing, typography, radii, shadows } from '../../theme';
 
-const ROLE_LABELS = {
-  owner: 'Owner',
-  manager: 'Manager',
-  cashier: 'Cashier',
-};
+const ROLE_LABELS = { owner: 'Owner', manager: 'Manager', cashier: 'Cashier' };
 
 export default function TeamScreen() {
   const { user: me } = useAuth();
@@ -24,6 +20,7 @@ export default function TeamScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [resetPinTarget, setResetPinTarget] = useState(null);
 
   const load = useCallback(async (isRefresh = false) => {
     try {
@@ -67,10 +64,17 @@ export default function TeamScreen() {
     }
   };
 
-  const handleAdd = async ({ email, name, password, role }) => {
-    await staffApi.create({ email, name, password, role });
+  const handleAdd = async ({ email, name, password, role, pin }) => {
+    await staffApi.create({ email, name, password, role, pin });
     setShowAdd(false);
     Toast.show({ type: 'success', text1: 'Staff added' });
+    load(true);
+  };
+
+  const handleResetPin = async (person, pin) => {
+    await staffApi.resetPin(person.id, pin);
+    setResetPinTarget(null);
+    Toast.show({ type: 'success', text1: `PIN updated for ${person.name}` });
     load(true);
   };
 
@@ -110,6 +114,7 @@ export default function TeamScreen() {
             isMe={String(item.id) === String(me?.id)}
             onToggleActive={() => handleToggleActive(item)}
             onRoleChange={(role) => handleRoleChange(item, role)}
+            onResetPin={() => setResetPinTarget(item)}
           />
         )}
         ListEmptyComponent={
@@ -127,11 +132,18 @@ export default function TeamScreen() {
         onCancel={() => setShowAdd(false)}
         onSubmit={handleAdd}
       />
+
+      <ResetPinModal
+        visible={!!resetPinTarget}
+        person={resetPinTarget}
+        onCancel={() => setResetPinTarget(null)}
+        onSubmit={handleResetPin}
+      />
     </SafeAreaView>
   );
 }
 
-function StaffRow({ person, isMe, onToggleActive, onRoleChange }) {
+function StaffRow({ person, isMe, onToggleActive, onRoleChange, onResetPin }) {
   const [expanded, setExpanded] = useState(false);
 
   const initials = (person.name || person.email || '?')
@@ -160,11 +172,12 @@ function StaffRow({ person, isMe, onToggleActive, onRoleChange }) {
             {!person.isActive && <Text style={styles.offTag}>Inactive</Text>}
           </View>
           <Text style={styles.rowEmail}>{person.email}</Text>
+          {!person.hasPin && (
+            <Text style={styles.noPin}>No PIN set — cannot check in</Text>
+          )}
         </View>
         <View style={styles.rolePill}>
-          <Text style={styles.roleText}>
-            {ROLE_LABELS[person.role] || person.role}
-          </Text>
+          <Text style={styles.roleText}>{ROLE_LABELS[person.role] || person.role}</Text>
         </View>
         {!isMe && (
           <Ionicons
@@ -188,15 +201,24 @@ function StaffRow({ person, isMe, onToggleActive, onRoleChange }) {
                   onPress={() => onRoleChange(r)}
                   activeOpacity={0.8}
                 >
-                  <Text
-                    style={[styles.roleBtnText, active && styles.roleBtnTextActive]}
-                  >
+                  <Text style={[styles.roleBtnText, active && styles.roleBtnTextActive]}>
                     {ROLE_LABELS[r]}
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </View>
+
+          <TouchableOpacity
+            style={styles.secondaryAction}
+            onPress={onResetPin}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="key-outline" size={16} color={colors.primary} />
+            <Text style={styles.secondaryActionText}>
+              {person.hasPin ? 'Reset PIN' : 'Set PIN'}
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.toggleBtn}
@@ -217,24 +239,23 @@ function AddStaffModal({ visible, onCancel, onSubmit }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [pin, setPin] = useState('');
   const [role, setRole] = useState('cashier');
   const [submitting, setSubmitting] = useState(false);
 
   const reset = () => {
-    setName('');
-    setEmail('');
-    setPassword('');
-    setRole('cashier');
+    setName(''); setEmail(''); setPassword(''); setPin(''); setRole('cashier');
     setSubmitting(false);
   };
 
-  const handleCancel = () => {
-    reset();
-    onCancel();
-  };
+  const handleCancel = () => { reset(); onCancel(); };
+
+  const canSubmit =
+    name.trim() && email.trim().length > 3 && password.length >= 6 &&
+    /^\d{4}$/.test(pin) && !submitting;
 
   const handleSubmit = async () => {
-    if (!name.trim() || !email.trim() || password.length < 6) return;
+    if (!canSubmit) return;
     setSubmitting(true);
     try {
       await onSubmit({
@@ -242,6 +263,7 @@ function AddStaffModal({ visible, onCancel, onSubmit }) {
         email: email.trim().toLowerCase(),
         password,
         role,
+        pin,
       });
       reset();
     } catch (err) {
@@ -250,19 +272,8 @@ function AddStaffModal({ visible, onCancel, onSubmit }) {
     }
   };
 
-  const canSubmit =
-    name.trim() &&
-    email.trim().length > 3 &&
-    password.length >= 6 &&
-    !submitting;
-
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={handleCancel}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleCancel}>
       <View style={styles.modalBackdrop}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -310,6 +321,23 @@ function AddStaffModal({ visible, onCancel, onSubmit }) {
               secureTextEntry
             />
 
+            <Text style={[styles.fieldLabel, styles.fieldSpacer]}>
+              Check-in PIN (4 digits)
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 4829"
+              placeholderTextColor={colors.textMuted}
+              value={pin}
+              onChangeText={(t) => setPin(t.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry
+            />
+            <Text style={styles.pinHint}>
+              Used to check in on a shared device. Pick something they'll remember.
+            </Text>
+
             <Text style={[styles.fieldLabel, styles.fieldSpacer]}>Role</Text>
             <View style={styles.roleBtns}>
               {['cashier', 'manager'].map((r) => {
@@ -321,9 +349,7 @@ function AddStaffModal({ visible, onCancel, onSubmit }) {
                     onPress={() => setRole(r)}
                     activeOpacity={0.8}
                   >
-                    <Text
-                      style={[styles.roleBtnText, active && styles.roleBtnTextActive]}
-                    >
+                    <Text style={[styles.roleBtnText, active && styles.roleBtnTextActive]}>
                       {ROLE_LABELS[r]}
                     </Text>
                   </TouchableOpacity>
@@ -341,6 +367,78 @@ function AddStaffModal({ visible, onCancel, onSubmit }) {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.modalSubmitText}>Add staff</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
+  );
+}
+
+function ResetPinModal({ visible, person, onCancel, onSubmit }) {
+  const [pin, setPin] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (visible) { setPin(''); setSubmitting(false); }
+  }, [visible, person?.id]);
+
+  const canSubmit = /^\d{4}$/.test(pin) && !submitting;
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      await onSubmit(person, pin);
+    } catch (err) {
+      Toast.show({ type: 'error', text1: 'Failed', text2: err.message });
+      setSubmitting(false);
+    }
+  };
+
+  if (!person) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
+      <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalSheetWrap}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Set PIN</Text>
+                <Text style={styles.modalSubtitle}>{person.name}</Text>
+              </View>
+              <TouchableOpacity onPress={onCancel} hitSlop={10}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={[styles.input, styles.pinInput]}
+              placeholder="••••"
+              placeholderTextColor={colors.textMuted}
+              value={pin}
+              onChangeText={(t) => setPin(t.replace(/[^0-9]/g, ''))}
+              keyboardType="number-pad"
+              maxLength={4}
+              secureTextEntry
+              autoFocus
+            />
+
+            <TouchableOpacity
+              style={[styles.modalSubmit, !canSubmit && styles.modalSubmitDisabled]}
+              onPress={handleSubmit}
+              disabled={!canSubmit}
+              activeOpacity={0.85}
+            >
+              {submitting ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.modalSubmitText}>Save PIN</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -370,11 +468,7 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     marginBottom: spacing.lg,
   },
-  addBtnText: {
-    ...typography.button,
-    color: '#fff',
-    fontSize: 15,
-  },
+  addBtnText: { ...typography.button, color: '#fff', fontSize: 15 },
 
   card: {
     backgroundColor: colors.surface,
@@ -392,64 +486,35 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   avatarOff: { backgroundColor: colors.background },
-  avatarText: {
-    ...typography.caption,
-    color: colors.primary,
-    fontWeight: '700',
-  },
+  avatarText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
   rowBody: { flex: 1, minWidth: 0 },
-  rowNameLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  rowName: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    fontWeight: '600',
-  },
+  rowNameLine: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  rowName: { ...typography.bodyMedium, color: colors.text, fontWeight: '600' },
   youTag: {
-    ...typography.tiny,
-    color: colors.primary,
-    fontWeight: '700',
+    ...typography.tiny, color: colors.primary, fontWeight: '700',
     backgroundColor: colors.primarySoft,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: radii.sm,
+    paddingHorizontal: 6, paddingVertical: 1, borderRadius: radii.sm,
   },
   offTag: {
-    ...typography.tiny,
-    color: colors.danger,
-    fontWeight: '700',
+    ...typography.tiny, color: colors.danger, fontWeight: '700',
     backgroundColor: colors.dangerSoft,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: radii.sm,
+    paddingHorizontal: 6, paddingVertical: 1, borderRadius: radii.sm,
   },
-  rowEmail: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    marginTop: 2,
+  rowEmail: { ...typography.tiny, color: colors.textMuted, marginTop: 2 },
+  noPin: {
+    ...typography.tiny, color: colors.warning, marginTop: 2, fontWeight: '600',
   },
   rolePill: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingHorizontal: spacing.sm, paddingVertical: 2,
     borderRadius: radii.pill,
     backgroundColor: colors.background,
   },
-  roleText: {
-    ...typography.tiny,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
+  roleText: { ...typography.tiny, color: colors.textSecondary, fontWeight: '600' },
 
   expand: {
     paddingHorizontal: spacing.md,
@@ -459,68 +524,45 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   expandLabel: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    fontWeight: '600',
+    ...typography.tiny, color: colors.textMuted, fontWeight: '600',
     marginBottom: spacing.sm,
   },
-  roleBtns: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
+  roleBtns: { flexDirection: 'row', gap: spacing.sm },
   roleBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    flex: 1, paddingVertical: spacing.md, alignItems: 'center',
+    borderRadius: radii.md, borderWidth: 1, borderColor: colors.border,
     backgroundColor: colors.background,
   },
-  roleBtnActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  roleBtnText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '700',
-  },
+  roleBtnActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  roleBtnText: { ...typography.caption, color: colors.textSecondary, fontWeight: '700' },
   roleBtnTextActive: { color: '#fff' },
 
-  toggleBtn: {
-    alignItems: 'center',
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
+  secondaryAction: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md, paddingVertical: spacing.sm,
   },
-  toggleBtnText: {
-    ...typography.caption,
-    color: colors.danger,
-    fontWeight: '600',
+  secondaryActionText: {
+    ...typography.caption, color: colors.primary, fontWeight: '600',
   },
 
+  toggleBtn: { alignItems: 'center', marginTop: spacing.sm, paddingVertical: spacing.sm },
+  toggleBtnText: { ...typography.caption, color: colors.danger, fontWeight: '600' },
+
   emptyBox: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1, justifyContent: 'center', alignItems: 'center',
     paddingVertical: spacing.xxxl * 2,
   },
-  emptyText: {
-    ...typography.h3,
-    color: colors.text,
-    marginTop: spacing.md,
-  },
+  emptyText: { ...typography.h3, color: colors.text, marginTop: spacing.md },
   emptySub: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-    textAlign: 'center',
+    ...typography.caption, color: colors.textMuted,
+    marginTop: spacing.xs, textAlign: 'center',
   },
 
   // Modal
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: colors.overlay,
     justifyContent: 'flex-end',
   },
   modalSheetWrap: { width: '100%' },
@@ -534,42 +576,36 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: spacing.lg,
   },
-  modalTitle: {
-    ...typography.h3,
-    color: colors.text,
-  },
+  modalTitle: { ...typography.h3, color: colors.text },
+  modalSubtitle: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   fieldLabel: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    fontWeight: '600',
-    marginBottom: spacing.xs,
+    ...typography.tiny, color: colors.textMuted,
+    fontWeight: '600', marginBottom: spacing.xs,
   },
   fieldSpacer: { marginTop: spacing.md },
   input: {
-    ...typography.bodyMedium,
-    color: colors.text,
+    ...typography.bodyMedium, color: colors.text,
     backgroundColor: colors.background,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
+    borderRadius: radii.md, borderWidth: 1, borderColor: colors.border,
+  },
+  pinInput: {
+    fontSize: 24, textAlign: 'center', letterSpacing: 8,
+    paddingVertical: spacing.lg,
+  },
+  pinHint: {
+    ...typography.tiny, color: colors.textMuted,
+    marginTop: spacing.sm, fontStyle: 'italic',
   },
   modalSubmit: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radii.md,
+    paddingVertical: spacing.lg, borderRadius: radii.md,
     marginTop: spacing.xl,
   },
   modalSubmitDisabled: { opacity: 0.4 },
-  modalSubmitText: {
-    ...typography.button,
-    color: '#fff',
-    fontSize: 17,
-  },
+  modalSubmitText: { ...typography.button, color: '#fff', fontSize: 17 },
 });

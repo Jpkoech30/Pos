@@ -118,13 +118,6 @@ export default function OrderDetailScreen({ route }) {
             </>
           )}
 
-          {order.paymentMethod === 'mpesa' && order.mpesaPhone && (
-            <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Sent to</Text>
-              <Text style={styles.metaValue}>{order.mpesaPhone}</Text>
-            </View>
-          )}
-
           {order.mpesaReceiptNumber && (
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>M-Pesa receipt</Text>
@@ -140,6 +133,18 @@ export default function OrderDetailScreen({ route }) {
               </Text>
             </View>
           )}
+
+          {order.staffName && (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Served by</Text>
+              <Text style={styles.metaValue}>{order.staffName}</Text>
+            </View>
+          )}
+
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>Order ID</Text>
+            <Text style={styles.metaValue}>#{order.id}</Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -155,7 +160,7 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center', paddingVertical: spacing.xl },
   statusCircle: {
     width: 72, height: 72, borderRadius: 36,
-    backgroundColor: '#16a34a',
+    backgroundColor: colors.success,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: spacing.md,
     ...shadows.md,
@@ -175,10 +180,9 @@ const styles = StyleSheet.create({
   },
 
   sectionLabel: {
-    ...typography.caption,
+    ...typography.overline,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
@@ -198,7 +202,7 @@ const styles = StyleSheet.create({
   itemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   itemQty: { ...typography.body, color: colors.textMuted, width: 32 },
   itemName: { ...typography.body, color: colors.text, flex: 1 },
-  itemPrice: { ...typography.body, color: colors.text, marginLeft: spacing.sm },
+  itemPrice: { ...typography.price, color: colors.text, marginLeft: spacing.sm },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
 
   totalRow: {
@@ -207,7 +211,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   totalLabel: { ...typography.body, color: colors.textSecondary },
-  totalValue: { ...typography.body, color: colors.text },
+  totalValue: { ...typography.price, color: colors.text },
   grandRow: {
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
@@ -215,7 +219,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   grandLabel: { ...typography.h3, color: colors.text },
-  grandValue: { ...typography.h3, color: colors.text },
+  grandValue: { ...typography.priceLarge, color: colors.text },
 
   metaRow: {
     flexDirection: 'row',

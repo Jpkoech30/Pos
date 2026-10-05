@@ -9,7 +9,10 @@ import Toast from 'react-native-toast-message';
 
 import { productsApi } from '../../services/products';
 import ProductTile from '../../components/ProductTile';
+import CheckInSheet from '../../components/CheckInSheet';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
+import { useShift } from '../../context/ShiftContext';
 import { formatKsh } from '../../utils/format';
 import { colors, spacing, typography, radii, shadows } from '../../theme';
 
@@ -24,8 +27,17 @@ export default function SaleScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
+  const [sheetMode, setSheetMode] = useState(null); // 'checkin' | 'checkout' | null
 
-  const { items, addToCart, count, subtotal } = useCart();
+  const { items, addToCart, updateQty, removeItem, count, subtotal } = useCart();
+  const { isManager } = useAuth();
+  const { staff } = useShift();
+
+  const qtyByProduct = useMemo(() => {
+    const map = {};
+    items.forEach((i) => { map[i.productId] = i.quantity; });
+    return map;
+  }, [items]);
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     try {
@@ -71,6 +83,14 @@ export default function SaleScreen({ navigation }) {
     });
   }, [products, search, category]);
 
+  const handleAdd = (product) => addToCart(product);
+
+  const handleRemoveOne = (product) => {
+    const current = qtyByProduct[product.id] || 0;
+    if (current <= 1) removeItem(product.id);
+    else updateQty(product.id, current - 1);
+  };
+
   const handleCheckout = () => {
     if (items.length === 0) {
       Toast.show({ type: 'info', text1: 'Cart is empty' });
@@ -104,19 +124,50 @@ export default function SaleScreen({ navigation }) {
     );
   }
 
+  // Shift pill — visible only to owner/manager
+  const showShift = isManager;
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>New Sale</Text>
-        <TouchableOpacity
-          style={styles.scanButton}
-          onPress={() => navigation.navigate('Scanner', { purpose: 'sale' })}
-        >
-          <Ionicons name="barcode-outline" size={20} color={colors.primary} />
-        </TouchableOpacity>
+
+        <View style={styles.headerActions}>
+          {showShift && (
+            <TouchableOpacity
+              style={[
+                styles.shiftPill,
+                staff && styles.shiftPillActive,
+              ]}
+              onPress={() => setSheetMode(staff ? 'checkout' : 'checkin')}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={staff ? 'person' : 'person-outline'}
+                size={14}
+                color={staff ? '#fff' : colors.primary}
+              />
+              <Text
+                style={[
+                  styles.shiftText,
+                  staff && styles.shiftTextActive,
+                ]}
+                numberOfLines={1}
+              >
+                {staff ? staff.name.split(' ')[0] : 'Check in'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={styles.scanButton}
+            onPress={() => navigation.navigate('Scanner', { purpose: 'sale' })}
+          >
+            <Ionicons name="barcode-outline" size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      {/* Search */}
       <View style={styles.searchWrap}>
         <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
@@ -136,7 +187,6 @@ export default function SaleScreen({ navigation }) {
         )}
       </View>
 
-      {/* Category chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -160,7 +210,6 @@ export default function SaleScreen({ navigation }) {
         })}
       </ScrollView>
 
-      {/* Grid */}
       <FlatList
         style={styles.list}
         data={filtered}
@@ -180,20 +229,22 @@ export default function SaleScreen({ navigation }) {
           <View style={styles.emptyBox}>
             <Ionicons name="search-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyText}>
-              {search
-                ? `No products match "${search}"`
-                : 'No products in this category'}
+              {search ? `No products match "${search}"` : 'No products in this category'}
             </Text>
           </View>
         }
         renderItem={({ item }) => (
           <View style={styles.tileWrap}>
-            <ProductTile product={item} onPress={() => addToCart(item)} />
+            <ProductTile
+              product={item}
+              quantity={qtyByProduct[item.id] || 0}
+              onPress={handleAdd}
+              onLongPress={handleRemoveOne}
+            />
           </View>
         )}
       />
 
-      {/* Cart bar */}
       {items.length > 0 && (
         <View style={styles.cartBar}>
           <View style={styles.cartInfo}>
@@ -208,6 +259,12 @@ export default function SaleScreen({ navigation }) {
           </TouchableOpacity>
         </View>
       )}
+
+      <CheckInSheet
+        visible={sheetMode !== null}
+        mode={sheetMode || 'checkin'}
+        onClose={() => setSheetMode(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -231,7 +288,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl, paddingVertical: spacing.md,
     borderRadius: radii.sm,
   },
-  retryText: { ...typography.button, color: colors.textInverse },
+  retryText: { ...typography.button, color: '#fff' },
 
   header: {
     flexDirection: 'row',
@@ -241,12 +298,38 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
-  title: { ...typography.h2, color: colors.text },
+  title: { ...typography.h2, color: colors.text, flex: 1 },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
   scanButton: {
     width: 40, height: 40, borderRadius: radii.md,
     backgroundColor: colors.primarySoft,
     alignItems: 'center', justifyContent: 'center',
   },
+
+  // Shift pill
+  shiftPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primarySoft,
+    maxWidth: 140,
+  },
+  shiftPillActive: {
+    backgroundColor: colors.primary,
+  },
+  shiftText: {
+    ...typography.tiny,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  shiftTextActive: { color: '#fff' },
 
   searchWrap: {
     flexDirection: 'row',
@@ -267,15 +350,8 @@ const styles = StyleSheet.create({
     padding: 0,
   },
 
-  chipsScroll: {
-    flexGrow: 0,
-    marginTop: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  chipsRow: {
-    paddingHorizontal: spacing.screenPadding,
-    gap: spacing.sm,
-  },
+  chipsScroll: { flexGrow: 0, marginTop: spacing.md, marginBottom: spacing.sm },
+  chipsRow: { paddingHorizontal: spacing.screenPadding, gap: spacing.sm },
   chip: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
@@ -284,30 +360,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chipActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
+    ...typography.caption, color: colors.textSecondary, fontWeight: '600',
   },
-  chipTextActive: {
-    color: '#fff',
-  },
+  chipTextActive: { color: '#fff' },
 
   list: { flex: 1 },
-  grid: {
-    paddingHorizontal: spacing.screenPadding - TILE_GAP,
-  },
+  grid: { paddingHorizontal: spacing.screenPadding - TILE_GAP },
   row: { justifyContent: 'space-between' },
   tileWrap: { flex: 1 / NUM_COLUMNS, maxWidth: '50%' },
 
   emptyBox: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1, justifyContent: 'center', alignItems: 'center',
     paddingVertical: spacing.xxxl * 2,
   },
   emptyText: {
@@ -328,22 +393,13 @@ const styles = StyleSheet.create({
     ...shadows.lg,
   },
   cartInfo: { flex: 1, marginLeft: spacing.sm },
-  cartCount: {
-    ...typography.caption, color: colors.textSecondary,
-  },
-  cartTotal: {
-    ...typography.h3, color: colors.text, marginTop: 2,
-  },
+  cartCount: { ...typography.caption, color: colors.textMuted },
+  cartTotal: { ...typography.price, color: colors.text, marginTop: 2 },
   checkoutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radii.md,
-    gap: spacing.sm,
+    paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
+    borderRadius: radii.md, gap: spacing.sm,
   },
-  checkoutText: {
-    ...typography.button, color: colors.textInverse,
-  },
+  checkoutText: { ...typography.button, color: '#fff' },
 });

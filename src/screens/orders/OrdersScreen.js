@@ -18,8 +18,6 @@ const PAYMENT_LABELS = {
   mpesa_stk: 'STK',
 };
 
-const LOW_REVENUE_THRESHOLD = 0;
-
 function sameDay(a, b) {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -163,7 +161,7 @@ export default function OrdersScreen({ navigation }) {
 }
 
 // ─────────────────────────────────────────────
-// Orders list (existing)
+// Orders list
 // ─────────────────────────────────────────────
 function OrdersList({ orders, navigation, refreshing, onRefresh }) {
   const sections = useMemo(() => buildSections(orders), [orders]);
@@ -271,6 +269,11 @@ function OrderRow({ order, isLast, onPress }) {
   const itemCount = order.items.reduce((s, i) => s + i.quantity, 0);
   const failed = order.paymentStatus === 'failed';
 
+  // Only show first name — the full name crowds the row
+  const firstName = order.staffName
+    ? order.staffName.split(' ')[0]
+    : null;
+
   return (
     <TouchableOpacity
       style={[styles.row, isLast && styles.rowLast]}
@@ -280,6 +283,7 @@ function OrderRow({ order, isLast, onPress }) {
       <Text style={styles.time}>{time}</Text>
       <Text style={styles.meta} numberOfLines={1}>
         {itemCount} item{itemCount === 1 ? '' : 's'} · {label}
+        {firstName ? ` · ${firstName}` : ''}
         {failed ? ' · Failed' : ''}
       </Text>
       <Text style={[styles.total, failed && styles.totalFailed]}>
@@ -294,13 +298,13 @@ function OrderRow({ order, isLast, onPress }) {
 // Analytics view
 // ─────────────────────────────────────────────
 function AnalyticsView({ orders, refreshing, onRefresh }) {
-  const [period, setPeriod] = useState('week'); // 'today' | 'week' | 'month'
+  const [period, setPeriod] = useState('week');
 
   const stats = useMemo(() => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const startOfWeek = new Date(startOfToday);
-    startOfWeek.setDate(startOfWeek.getDate() - 6); // last 7 days
+    startOfWeek.setDate(startOfWeek.getDate() - 6);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     const cutoff =
@@ -309,14 +313,10 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
       startOfMonth;
 
     const successful = orders.filter(
-      (o) =>
-        o.paymentStatus !== 'failed' &&
-        new Date(o.createdAt) >= cutoff,
+      (o) => o.paymentStatus !== 'failed' && new Date(o.createdAt) >= cutoff,
     );
     const failed = orders.filter(
-      (o) =>
-        o.paymentStatus === 'failed' &&
-        new Date(o.createdAt) >= cutoff,
+      (o) => o.paymentStatus === 'failed' && new Date(o.createdAt) >= cutoff,
     );
 
     const revenue = successful.reduce((s, o) => s + o.total, 0);
@@ -333,7 +333,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
     }, 0);
     const hasProfit = successful.some((o) => o.grossProfit != null);
 
-    // Daily buckets for the chart (last 7 days, always)
     const buckets = [];
     for (let i = 6; i >= 0; i--) {
       const day = new Date(startOfToday);
@@ -353,7 +352,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
     }
     const peakDaily = Math.max(0, ...buckets.map((b) => b.value));
 
-    // Top items
     const itemMap = new Map();
     successful.forEach((o) => {
       o.items.forEach((i) => {
@@ -395,7 +393,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Period selector */}
       <View style={styles.periodRow}>
         {[
           { key: 'today', label: 'Today' },
@@ -420,7 +417,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
         })}
       </View>
 
-      {/* Hero */}
       <View style={styles.heroCard}>
         <Text style={styles.heroLabel}>Revenue</Text>
         <Text style={styles.heroValue}>{formatKsh(stats.revenue)}</Text>
@@ -430,7 +426,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
         </Text>
       </View>
 
-      {/* Stats row */}
       <View style={styles.statsRow}>
         <View style={styles.statBox}>
           <Ionicons name="cash-outline" size={16} color={colors.primary} />
@@ -444,7 +439,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
         </View>
       </View>
 
-      {/* Split bar */}
       {stats.revenue > 0 && (
         <View style={styles.splitCard}>
           <View style={styles.splitBarTrack}>
@@ -462,7 +456,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
         </View>
       )}
 
-      {/* Profit */}
       {stats.grossProfit != null && (
         <View style={styles.profitCard}>
           <View style={styles.profitHeader}>
@@ -477,7 +470,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
         </View>
       )}
 
-      {/* Failed payments alert */}
       {stats.failedCount > 0 && (
         <View style={styles.alertCard}>
           <Ionicons name="warning-outline" size={18} color={colors.danger} />
@@ -493,7 +485,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
         </View>
       )}
 
-      {/* 7-day chart */}
       <Text style={styles.sectionLabel}>Last 7 days</Text>
       <View style={styles.chartCard}>
         <View style={styles.chartRow}>
@@ -521,7 +512,6 @@ function AnalyticsView({ orders, refreshing, onRefresh }) {
         )}
       </View>
 
-      {/* Top items */}
       <Text style={styles.sectionLabel}>Top items</Text>
       <View style={styles.card}>
         {stats.topItems.length === 0 ? (
@@ -592,7 +582,7 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: { color: '#fff' },
 
-  // ─── Orders list ───
+  // Orders list
   listContent: {
     paddingHorizontal: spacing.screenPadding,
     paddingBottom: spacing.xxxl,
@@ -704,9 +694,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   total: {
-    ...typography.bodyMedium,
+    ...typography.price,
     color: colors.text,
-    fontWeight: '600',
   },
   totalFailed: { color: colors.danger, textDecorationLine: 'line-through' },
 
@@ -717,7 +706,7 @@ const styles = StyleSheet.create({
   emptyText: { ...typography.body, color: colors.textSecondary },
   emptySub: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
 
-  // ─── Analytics ───
+  // Analytics
   analyticsScroll: { flex: 1 },
   analyticsContent: {
     paddingHorizontal: spacing.screenPadding,

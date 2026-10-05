@@ -18,12 +18,18 @@ import { colors, spacing, typography, radii, shadows } from '../../theme';
 const HINT_KEY = 'products_onboarding_dismissed';
 const LOW_STOCK_THRESHOLD = 10;
 
+const DEFAULT_FILTERS = { category: null, stock: 'all', margin: 'all' };
+
 export default function ProductsScreen({ navigation }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState('catalog');
   const [stockTarget, setStockTarget] = useState(null);
+
+  // Lifted filter/sort state so Stock view can set them
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [sort, setSort] = useState('name');
 
   const load = useCallback(async (isRefresh = false) => {
     try {
@@ -60,6 +66,14 @@ export default function ProductsScreen({ navigation }) {
       text1: 'Stock updated',
       text2: `${product.name} → ${nextStock}`,
     });
+  };
+
+  // Called by Stock view when a summary card is tapped.
+  // Switches to the Catalog tab with a preset filter.
+  const jumpToCatalogWithFilter = (partial) => {
+    setFilters({ ...DEFAULT_FILTERS, ...partial });
+    setSort('stockLow'); // sort low first — most useful default for these jumps
+    setView('catalog');
   };
 
   if (loading && products.length === 0) {
@@ -124,6 +138,10 @@ export default function ProductsScreen({ navigation }) {
           refreshing={refreshing}
           onRefresh={onRefresh}
           onStockPress={setStockTarget}
+          filters={filters}
+          setFilters={setFilters}
+          sort={sort}
+          setSort={setSort}
         />
       ) : (
         <StockView
@@ -131,6 +149,7 @@ export default function ProductsScreen({ navigation }) {
           refreshing={refreshing}
           onRefresh={onRefresh}
           onStockPress={setStockTarget}
+          onFilterTap={jumpToCatalogWithFilter}
         />
       )}
 
@@ -145,19 +164,14 @@ export default function ProductsScreen({ navigation }) {
 }
 
 // ─────────────────────────────────────────────
-// Catalog view (existing)
+// Catalog view
 // ─────────────────────────────────────────────
 function CatalogView({
   products, navigation, refreshing, onRefresh, onStockPress,
+  filters, setFilters, sort, setSort,
 }) {
   const [search, setSearch] = useState('');
   const [showHint, setShowHint] = useState(false);
-  const [filters, setFilters] = useState({
-    category: null,
-    stock: 'all',
-    margin: 'all',
-  });
-  const [sort, setSort] = useState('name');
   const [showFilters, setShowFilters] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -264,10 +278,7 @@ function CatalogView({
     if (ids.length === 0) return;
     try {
       await Promise.all(ids.map((id) => productsApi.remove(id)));
-      Toast.show({
-        type: 'success',
-        text1: `Deleted ${ids.length}`,
-      });
+      Toast.show({ type: 'success', text1: `Deleted ${ids.length}` });
       exitSelection();
     } catch (err) {
       Toast.show({ type: 'error', text1: 'Delete failed', text2: err.message });
@@ -398,21 +409,15 @@ function CatalogView({
         <Text style={styles.pulseText}>
           {filtered.length} of {stats.total}
         </Text>
-        {stats.low > 0 && (
-          <View style={[styles.pulseChip, styles.pulseChipWarn]}>
-            <View style={[styles.pulseDot, { backgroundColor: colors.warning }]} />
-            <Text style={[styles.pulseChipText, { color: colors.warning }]}>
-              {stats.low} low
-            </Text>
-          </View>
-        )}
-        {stats.out > 0 && (
-          <View style={[styles.pulseChip, styles.pulseChipDanger]}>
-            <View style={[styles.pulseDot, { backgroundColor: colors.danger }]} />
-            <Text style={[styles.pulseChipText, { color: colors.danger }]}>
-              {stats.out} out
-            </Text>
-          </View>
+        {activeFilterCount > 0 && (
+          <TouchableOpacity
+            style={styles.clearFiltersChip}
+            onPress={() => setFilters(DEFAULT_FILTERS)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="close-circle" size={12} color={colors.primary} />
+            <Text style={styles.clearFiltersText}>Clear filters</Text>
+          </TouchableOpacity>
         )}
       </View>
 
@@ -437,10 +442,8 @@ function CatalogView({
         renderItem={({ item }) => (
           <ProductListRow
             product={item}
-            onPress={() =>
-              selectionMode ? toggleSelection(item.id) : navigation.navigate('ProductDetail', { product: item })
-            }
-            onLongPress={() => !selectionMode && enterSelection(item.id)}
+            onPress={() => navigation.navigate('ProductDetail', { product: item })}
+            onLongPress={() => enterSelection(item.id)}
             onStockPress={() => onStockPress(item)}
           />
         )}
@@ -462,9 +465,9 @@ function CatalogView({
 }
 
 // ─────────────────────────────────────────────
-// Stock view (new)
+// Stock view
 // ─────────────────────────────────────────────
-function StockView({ products, refreshing, onRefresh, onStockPress }) {
+function StockView({ products, refreshing, onRefresh, onStockPress, onFilterTap }) {
   const [subView, setSubView] = useState('attention');
 
   const stats = useMemo(() => {
@@ -476,20 +479,12 @@ function StockView({ products, refreshing, onRefresh, onStockPress }) {
       const stock = Number(p.stock);
       const cost = p.costPrice != null ? Number(p.costPrice) : Number(p.price) * 0.6;
 
-      if (stock > 0) {
-        totalValue += cost * stock;
-      }
-
-      if (stock <= 0) {
-        outItems.push(p);
-      } else if (stock < LOW_STOCK_THRESHOLD) {
-        lowItems.push(p);
-      }
+      if (stock > 0) totalValue += cost * stock;
+      if (stock <= 0) outItems.push(p);
+      else if (stock < LOW_STOCK_THRESHOLD) lowItems.push(p);
     });
 
-    // Sort low items by stock ascending — most urgent first
     lowItems.sort((a, b) => Number(a.stock) - Number(b.stock));
-    // Sort out items alphabetically
     outItems.sort((a, b) => a.name.localeCompare(b.name));
 
     return {
@@ -526,35 +521,60 @@ function StockView({ products, refreshing, onRefresh, onStockPress }) {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Summary cards */}
-      <View style={styles.summaryGrid}>
-        <View style={[styles.summaryCard, styles.summaryCardPrimary]}>
-          <Text style={styles.summaryLabelLight}>Stock value</Text>
-          <Text style={styles.summaryValueLight}>
-            {formatKsh(stats.totalValue)}
-          </Text>
-          <Text style={styles.summarySubLight}>
-            across {stats.totalItems} {stats.totalItems === 1 ? 'item' : 'items'}
-          </Text>
-        </View>
+      {/* Stock value — not tappable, it's an aggregate */}
+      <View style={[styles.summaryCard, styles.summaryCardPrimary]}>
+        <Text style={styles.summaryLabelLight}>Stock value</Text>
+        <Text style={styles.summaryValueLight}>
+          {formatKsh(stats.totalValue)}
+        </Text>
+        <Text style={styles.summarySubLight}>
+          across {stats.totalItems} {stats.totalItems === 1 ? 'item' : 'items'}
+        </Text>
+      </View>
 
-        <View style={styles.summaryRow}>
-          <View style={[styles.summaryCard, styles.summaryCardWarn]}>
+      {/* Low / Out — tappable, jump to Catalog with filter */}
+      <View style={styles.summaryRow}>
+        <TouchableOpacity
+          style={[styles.summaryCard, styles.summaryCardWarn]}
+          onPress={() => onFilterTap({ stock: 'low' })}
+          activeOpacity={0.75}
+          disabled={stats.lowCount === 0}
+        >
+          <View style={styles.summaryCardHeader}>
             <View style={styles.summaryIconRow}>
               <Ionicons name="alert-circle" size={16} color={colors.warning} />
               <Text style={styles.summaryLabel}>Low stock</Text>
             </View>
-            <Text style={styles.summaryValue}>{stats.lowCount}</Text>
+            {stats.lowCount > 0 && (
+              <Ionicons name="chevron-forward" size={16} color={colors.warning} />
+            )}
           </View>
+          <Text style={styles.summaryValue}>{stats.lowCount}</Text>
+          {stats.lowCount > 0 && (
+            <Text style={styles.summaryTapHint}>Tap to view</Text>
+          )}
+        </TouchableOpacity>
 
-          <View style={[styles.summaryCard, styles.summaryCardDanger]}>
+        <TouchableOpacity
+          style={[styles.summaryCard, styles.summaryCardDanger]}
+          onPress={() => onFilterTap({ stock: 'out' })}
+          activeOpacity={0.75}
+          disabled={stats.outCount === 0}
+        >
+          <View style={styles.summaryCardHeader}>
             <View style={styles.summaryIconRow}>
               <Ionicons name="close-circle" size={16} color={colors.danger} />
               <Text style={styles.summaryLabel}>Out</Text>
             </View>
-            <Text style={styles.summaryValue}>{stats.outCount}</Text>
+            {stats.outCount > 0 && (
+              <Ionicons name="chevron-forward" size={16} color={colors.danger} />
+            )}
           </View>
-        </View>
+          <Text style={styles.summaryValue}>{stats.outCount}</Text>
+          {stats.outCount > 0 && (
+            <Text style={styles.summaryTapHint}>Tap to view</Text>
+          )}
+        </TouchableOpacity>
       </View>
 
       {/* Sub-view toggle */}
@@ -589,7 +609,6 @@ function StockView({ products, refreshing, onRefresh, onStockPress }) {
         </TouchableOpacity>
       </View>
 
-      {/* List */}
       {listData.length === 0 ? (
         <View style={styles.stockEmpty}>
           <Ionicons name="checkmark-circle" size={48} color={colors.success} />
@@ -679,7 +698,6 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
 
-  // Segmented control
   segment: {
     flexDirection: 'row',
     marginHorizontal: spacing.screenPadding,
@@ -696,19 +714,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.sm,
     alignItems: 'center',
   },
-  segmentBtnActive: {
-    backgroundColor: colors.primary,
-  },
+  segmentBtnActive: { backgroundColor: colors.primary },
   segmentText: {
     ...typography.bodyMedium,
     color: colors.textSecondary,
     fontWeight: '600',
   },
-  segmentTextActive: {
-    color: '#fff',
-  },
+  segmentTextActive: { color: '#fff' },
 
-  // Selection mode bar
   selectionBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -722,7 +735,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  // Hint
   hintCard: {
     flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md,
     marginHorizontal: spacing.screenPadding, marginBottom: spacing.md,
@@ -744,7 +756,6 @@ const styles = StyleSheet.create({
     marginTop: 2, lineHeight: 18,
   },
 
-  // Search
   searchRow: {
     flexDirection: 'row', gap: spacing.sm,
     paddingHorizontal: spacing.screenPadding,
@@ -787,16 +798,20 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md, paddingBottom: spacing.sm,
   },
   pulseText: { ...typography.caption, color: colors.textMuted },
-  pulseChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: spacing.sm, paddingVertical: 3,
-    borderRadius: radii.pill, backgroundColor: colors.surface,
-    borderWidth: 1, borderColor: colors.border,
+  clearFiltersChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radii.pill,
+    backgroundColor: colors.primarySoft,
   },
-  pulseChipWarn: { backgroundColor: colors.warningSoft, borderColor: 'transparent' },
-  pulseChipDanger: { backgroundColor: colors.dangerSoft, borderColor: 'transparent' },
-  pulseDot: { width: 6, height: 6, borderRadius: 3 },
-  pulseChipText: { ...typography.tiny, fontWeight: '600' },
+  clearFiltersText: {
+    ...typography.tiny,
+    color: colors.primary,
+    fontWeight: '700',
+  },
 
   list: { flex: 1 },
   listContent: {
@@ -814,7 +829,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.md, textAlign: 'center',
   },
 
-  // Bulk bar
   bulkBar: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     padding: spacing.screenPadding,
@@ -830,7 +844,6 @@ const styles = StyleSheet.create({
   },
   bulkDeleteText: { ...typography.button, color: '#fff', fontSize: 16 },
 
-  // Empty hero
   emptyHero: {
     flex: 1, alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: spacing.screenPadding,
@@ -876,13 +889,10 @@ const styles = StyleSheet.create({
   },
   summaryCardPrimary: {
     backgroundColor: colors.primary,
+    marginBottom: spacing.sm,
   },
-  summaryCardWarn: {
-    backgroundColor: colors.warningSoft,
-  },
-  summaryCardDanger: {
-    backgroundColor: colors.dangerSoft,
-  },
+  summaryCardWarn: { backgroundColor: colors.warningSoft },
+  summaryCardDanger: { backgroundColor: colors.dangerSoft },
   summaryLabelLight: {
     ...typography.tiny, color: 'rgba(255,255,255,0.8)',
     fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1,
@@ -895,9 +905,14 @@ const styles = StyleSheet.create({
     ...typography.caption, color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
   },
+  summaryCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  },
   summaryIconRow: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    marginBottom: spacing.sm,
   },
   summaryLabel: {
     ...typography.tiny, color: colors.text,
@@ -906,8 +921,13 @@ const styles = StyleSheet.create({
   summaryValue: {
     ...typography.h2, color: colors.text,
   },
+  summaryTapHint: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
 
-  // Sub-toggle
   subToggle: {
     flexDirection: 'row',
     gap: spacing.xs,
@@ -931,7 +951,6 @@ const styles = StyleSheet.create({
   },
   subToggleTextActive: { color: '#fff' },
 
-  // Stock rows
   stockRow: {
     flexDirection: 'row',
     alignItems: 'center',

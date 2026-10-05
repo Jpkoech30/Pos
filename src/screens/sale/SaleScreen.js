@@ -11,7 +11,6 @@ import { productsApi } from '../../services/products';
 import ProductTile from '../../components/ProductTile';
 import CheckInSheet from '../../components/CheckInSheet';
 import { useCart } from '../../context/CartContext';
-import { useAuth } from '../../context/AuthContext';
 import { useShift } from '../../context/ShiftContext';
 import { formatKsh } from '../../utils/format';
 import { colors, spacing, typography, radii, shadows } from '../../theme';
@@ -27,17 +26,23 @@ export default function SaleScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
-  const [sheetMode, setSheetMode] = useState(null); // 'checkin' | 'checkout' | null
+
+  // 'checkin' | 'checkout' | null
+  const [sheetMode, setSheetMode] = useState(null);
+  // 'checkout' when the sheet was opened because Charge needs a shift
+  const [pendingIntent, setPendingIntent] = useState(null);
 
   const { items, addToCart, updateQty, removeItem, count, subtotal } = useCart();
-  const { isManager } = useAuth();
-  const { staff } = useShift();
+  const { staff, staffCount } = useShift();
 
   const qtyByProduct = useMemo(() => {
     const map = {};
     items.forEach((i) => { map[i.productId] = i.quantity; });
     return map;
   }, [items]);
+
+  // Only require check-in when the shop has more than one active user
+  const needsCheckIn = staffCount >= 2 && !staff;
 
   const loadProducts = useCallback(async (isRefresh = false) => {
     try {
@@ -96,7 +101,30 @@ export default function SaleScreen({ navigation }) {
       Toast.show({ type: 'info', text1: 'Cart is empty' });
       return;
     }
+    if (needsCheckIn) {
+      setPendingIntent('checkout');
+      setSheetMode('checkin');
+      return;
+    }
     navigation.navigate('Checkout');
+  };
+
+  const handleSheetClose = () => {
+    setSheetMode(null);
+    setPendingIntent(null);
+  };
+
+  const handleSheetSuccess = () => {
+    const wasPending = pendingIntent === 'checkout';
+    setSheetMode(null);
+    setPendingIntent(null);
+    if (wasPending) {
+      navigation.navigate('Checkout');
+    }
+  };
+
+  const openShiftSheet = () => {
+    setSheetMode(staff ? 'checkout' : 'checkin');
   };
 
   if (loading) {
@@ -124,40 +152,29 @@ export default function SaleScreen({ navigation }) {
     );
   }
 
-  // Shift pill — visible only to owner/manager
-  const showShift = isManager;
-
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>New Sale</Text>
 
         <View style={styles.headerActions}>
-          {showShift && (
-            <TouchableOpacity
-              style={[
-                styles.shiftPill,
-                staff && styles.shiftPillActive,
-              ]}
-              onPress={() => setSheetMode(staff ? 'checkout' : 'checkin')}
-              activeOpacity={0.8}
+          <TouchableOpacity
+            style={[styles.shiftPill, staff && styles.shiftPillActive]}
+            onPress={openShiftSheet}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={staff ? 'person' : 'person-outline'}
+              size={14}
+              color={staff ? '#fff' : colors.primary}
+            />
+            <Text
+              style={[styles.shiftText, staff && styles.shiftTextActive]}
+              numberOfLines={1}
             >
-              <Ionicons
-                name={staff ? 'person' : 'person-outline'}
-                size={14}
-                color={staff ? '#fff' : colors.primary}
-              />
-              <Text
-                style={[
-                  styles.shiftText,
-                  staff && styles.shiftTextActive,
-                ]}
-                numberOfLines={1}
-              >
-                {staff ? staff.name.split(' ')[0] : 'Check in'}
-              </Text>
-            </TouchableOpacity>
-          )}
+              {staff ? staff.name.split(' ')[0] : 'Check in'}
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.scanButton}
@@ -263,7 +280,8 @@ export default function SaleScreen({ navigation }) {
       <CheckInSheet
         visible={sheetMode !== null}
         mode={sheetMode || 'checkin'}
-        onClose={() => setSheetMode(null)}
+        onClose={handleSheetClose}
+        onSuccess={handleSheetSuccess}
       />
     </SafeAreaView>
   );
@@ -310,7 +328,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // Shift pill
   shiftPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,13 +338,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
     maxWidth: 140,
   },
-  shiftPillActive: {
-    backgroundColor: colors.primary,
-  },
+  shiftPillActive: { backgroundColor: colors.primary },
   shiftText: {
-    ...typography.tiny,
-    color: colors.primary,
-    fontWeight: '700',
+    ...typography.tiny, color: colors.primary, fontWeight: '700',
   },
   shiftTextActive: { color: '#fff' },
 

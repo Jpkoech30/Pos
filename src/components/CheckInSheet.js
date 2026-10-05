@@ -10,7 +10,7 @@ import { staffApi } from '../services/staff';
 import { useShift } from '../context/ShiftContext';
 import { colors, spacing, typography, radii } from '../theme';
 
-export default function CheckInSheet({ visible, mode, onClose }) {
+export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
   const { staff: currentStaff, checkIn, checkOut } = useShift();
   const [pin, setPin] = useState('');
   const [error, setError] = useState(null);
@@ -22,7 +22,6 @@ export default function CheckInSheet({ visible, mode, onClose }) {
       setPin('');
       setError(null);
       setSubmitting(false);
-      // Focus the input shortly after the modal opens
       if (mode === 'checkin') {
         setTimeout(() => inputRef.current?.focus(), 200);
       }
@@ -44,6 +43,7 @@ export default function CheckInSheet({ visible, mode, onClose }) {
       const data = await staffApi.verifyPin(pin);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       await checkIn(data.staff);
+      if (onSuccess) onSuccess(data.staff);
       onClose();
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -180,10 +180,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.lg,
   },
-  title: {
-    ...typography.h3,
-    color: colors.text,
-  },
+  title: { ...typography.h3, color: colors.text },
   subtitle: {
     ...typography.caption,
     color: colors.textMuted,
@@ -203,9 +200,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     fontSize: 28,
   },
-  pinInputError: {
-    borderColor: colors.danger,
-  },
+  pinInputError: { borderColor: colors.danger },
 
   statusRow: {
     flexDirection: 'row',
@@ -214,10 +209,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.md,
   },
-  statusText: {
-    ...typography.caption,
-    color: colors.textMuted,
-  },
+  statusText: { ...typography.caption, color: colors.textMuted },
 
   errorRow: {
     flexDirection: 'row',
@@ -228,11 +220,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dangerSoft,
     borderRadius: radii.sm,
   },
-  errorText: {
-    ...typography.caption,
-    color: colors.danger,
-    flex: 1,
-  },
+  errorText: { ...typography.caption, color: colors.danger, flex: 1 },
 
   helpText: {
     ...typography.tiny,
@@ -242,7 +230,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Check out mode
   whoCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -261,16 +248,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   whoBody: { flex: 1 },
-  whoName: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    fontWeight: '700',
-  },
-  whoRole: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
+  whoName: { ...typography.bodyMedium, color: colors.text, fontWeight: '700' },
+  whoRole: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
   checkOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -280,17 +259,11 @@ const styles = StyleSheet.create({
     borderRadius: radii.md,
     backgroundColor: colors.primary,
   },
-  checkOutText: {
-    ...typography.button,
-    color: '#fff',
-  },
+  checkOutText: { ...typography.button, color: '#fff' },
   cancelBtn: {
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginTop: spacing.sm,
   },
-  cancelText: {
-    ...typography.bodyMedium,
-    color: colors.textMuted,
-  },
+  cancelText: { ...typography.bodyMedium, color: colors.textMuted },
 });

@@ -198,7 +198,7 @@ function DayHeader({ section, onPress }) {
           <Text style={styles.splitValue}>{formatKsh(cash)}</Text>
         </View>
         <View style={styles.splitItem}>
-          <View style={[styles.splitDot, { backgroundColor: colors.mpesaRed }]} />
+          <View style={[styles.splitDot, { backgroundColor: colors.mpesa }]} />
           <Text style={styles.splitLabel}>M-Pesa</Text>
           <Text style={styles.splitValue}>{formatKsh(mpesa)}</Text>
         </View>
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   barFill: { backgroundColor: colors.primary },
-  barRest: { backgroundColor: colors.mpesaRed },
+  barRest: { backgroundColor: colors.mpesa },
 
   splitRow: {
     flexDirection: 'row',

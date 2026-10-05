@@ -290,7 +290,7 @@ export default function DailyAnalyticsScreen({ route, navigation }) {
                 </View>
               </View>
               <View style={styles.splitItem}>
-                <View style={[styles.dot, { backgroundColor: colors.mpesaRed }]} />
+                <View style={[styles.dot, { backgroundColor: colors.mpesa }]} />
                 <View>
                   <Text style={styles.splitLabel}>
                     M-Pesa · {stats.mpesaOrders}{' '}
@@ -615,7 +615,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   barFill: { backgroundColor: colors.primary },
-  barRest: { backgroundColor: colors.mpesaRed },
+  barRest: { backgroundColor: colors.mpesa },
   splitRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

@@ -1,48 +1,113 @@
 /**
- * TYPOGRAPHY TOKENS
+ * Typography tokens
  *
- * Named text presets. Each is a plain object with fontSize / fontWeight
- * so it can be spread into a StyleSheet rule:
- *
- *   const styles = StyleSheet.create({
- *     title: { ...typography.h2, color: colors.text },
- *   });
- *
- * Don't mix these into one-off rules by hand — if you need a new
- * size, add it here so the whole app stays consistent.
+ * Every token declares lineHeight explicitly — Android and iOS default
+ * to different line heights otherwise. Weight comes from `weights`
+ * constants, never a raw string.
  */
+export const weights = {
+  regular:  '400',
+  medium:   '500',
+  semibold: '600',
+  bold:     '700',
+  heavy:    '800',
+};
+
+const family = undefined; // set to 'Inter' etc. if you ship a custom font
+
 export const typography = {
-  // --- Display ---
-  // The biggest text on any screen — used for the total balance
-  // on the Home hero. Tight letterspacing makes it feel deliberate.
-  display: { fontSize: 38, fontWeight: '800', letterSpacing: -0.5 },
+  display: {
+    fontFamily: family,
+    fontSize: 38, lineHeight: 44,
+    fontWeight: weights.heavy, letterSpacing: -0.6,
+  },
 
-  // --- Headings ---
-  // Descending hierarchy. h1 = screen title, h2 = section title,
-  // h3 = sub-section, h4 = card title.
-  h1: { fontSize: 30, fontWeight: '700', letterSpacing: -0.3 },
-  h2: { fontSize: 22, fontWeight: '700' },
-  h3: { fontSize: 18, fontWeight: '600' },
-  h4: { fontSize: 16, fontWeight: '600' },
+  h1: {
+    fontFamily: family,
+    fontSize: 30, lineHeight: 36,
+    fontWeight: weights.bold, letterSpacing: -0.4,
+  },
+  h2: {
+    fontFamily: family,
+    fontSize: 22, lineHeight: 28,
+    fontWeight: weights.bold, letterSpacing: -0.2,
+  },
+  h3: {
+    fontFamily: family,
+    fontSize: 18, lineHeight: 24,
+    fontWeight: weights.semibold, letterSpacing: -0.1,
+  },
+  h4: {
+    fontFamily: family,
+    fontSize: 16, lineHeight: 22,
+    fontWeight: weights.semibold,
+  },
 
-  // --- Body ---
-  // Reading text. Three weights so you can emphasize without
-  // changing size (keeps line lengths stable).
-  body: { fontSize: 15, fontWeight: '400' },
-  bodyMedium: { fontSize: 15, fontWeight: '500' },
-  bodyBold: { fontSize: 15, fontWeight: '600' },
+  body: {
+    fontFamily: family,
+    fontSize: 15, lineHeight: 22,
+    fontWeight: weights.regular,
+  },
+  bodyMedium: {
+    fontFamily: family,
+    fontSize: 15, lineHeight: 22,
+    fontWeight: weights.medium,
+  },
+  bodyBold: {
+    fontFamily: family,
+    fontSize: 15, lineHeight: 22,
+    fontWeight: weights.semibold,
+  },
 
-  // --- Small ---
-  // Support text: descriptions, hints, metadata.
-  caption: { fontSize: 13, fontWeight: '400' },
-  captionMedium: { fontSize: 13, fontWeight: '500' },
+  caption: {
+    fontFamily: family,
+    fontSize: 13, lineHeight: 18,
+    fontWeight: weights.regular,
+  },
+  captionMedium: {
+    fontFamily: family,
+    fontSize: 13, lineHeight: 18,
+    fontWeight: weights.medium,
+  },
 
-  // --- Micro ---
-  // Labels, badges, uppercase section headers. The letterSpacing
-  // is intentional — uppercase text needs breathing room to read well.
-  tiny: { fontSize: 11, fontWeight: '600', letterSpacing: 0.6 },
+  tiny: {
+    fontFamily: family,
+    fontSize: 11, lineHeight: 14,
+    fontWeight: weights.semibold, letterSpacing: 0.3,
+  },
 
-  // --- Button ---
-  // Slightly heavier than body — buttons should feel solid.
-  button: { fontSize: 16, fontWeight: '600' },
+  overline: {
+    fontFamily: family,
+    fontSize: 11, lineHeight: 14,
+    fontWeight: weights.bold, letterSpacing: 0.8,
+  },
+
+  button: {
+    fontFamily: family,
+    fontSize: 16, lineHeight: 20,
+    fontWeight: weights.semibold, letterSpacing: 0.1,
+  },
+  buttonLarge: {
+    fontFamily: family,
+    fontSize: 17, lineHeight: 22,
+    fontWeight: weights.bold, letterSpacing: 0.1,
+  },
+  buttonSmall: {
+    fontFamily: family,
+    fontSize: 14, lineHeight: 18,
+    fontWeight: weights.semibold, letterSpacing: 0.1,
+  },
+
+  price: {
+    fontFamily: family,
+    fontSize: 16, lineHeight: 20,
+    fontWeight: weights.bold,
+    fontVariant: ['tabular-nums'],
+  },
+  priceLarge: {
+    fontFamily: family,
+    fontSize: 28, lineHeight: 32,
+    fontWeight: weights.heavy, letterSpacing: -0.3,
+    fontVariant: ['tabular-nums'],
+  },
 };

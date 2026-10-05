@@ -32,11 +32,12 @@ export function AuthProvider({ children }) {
                 role: fresh.user.role,
                 shopId: fresh.user.shopId,
               };
+              const nextShop = fresh.shop || null;
               setUser(nextUser);
-              setShop(fresh.shop || null);
+              setShop(nextShop);
               await SecureStore.setItemAsync(
                 'session',
-                JSON.stringify({ token: parsed.token, user: nextUser, shop: fresh.shop }),
+                JSON.stringify({ token: parsed.token, user: nextUser, shop: nextShop }),
               );
             } catch (err) {
               // 401 → interceptor already signed out. Other errors → keep cache.
@@ -63,7 +64,7 @@ export function AuthProvider({ children }) {
       'session',
       JSON.stringify({ token, user: userObj, shop: shopObj }),
     );
-    // Legacy keys, kept for compatibility with anything still reading them
+    // Legacy flat keys still read by services/api.js
     await SecureStore.setItemAsync('token', token);
     await SecureStore.setItemAsync('email', userObj.email);
   };
@@ -104,23 +105,51 @@ export function AuthProvider({ children }) {
     setShop(null);
   };
 
+  // Patch the current user in place and persist the session.
+  // Use after a successful profile update so the UI reflects the new value
+  // without an extra /me round-trip.
+  const updateUser = async (patch) => {
+    if (!user) return;
+    const nextUser = { ...user, ...patch };
+    setUser(nextUser);
+    try {
+      await SecureStore.setItemAsync(
+        'session',
+        JSON.stringify({ token: nextUser.token, user: nextUser, shop }),
+      );
+      if (nextUser.email) {
+        await SecureStore.setItemAsync('email', nextUser.email);
+      }
+    } catch (e) {
+      console.warn('persist user failed', e.message);
+    }
+  };
+
+  // Re-fetch /me and replace both user and shop. Persists the fresh session.
+  // Side effects moved OUT of setState updaters so React 18/19 double-invocation
+  // and bail-out optimisations can't skip the SecureStore write.
   const refreshShop = async () => {
+    if (!user) return null;
     try {
       const fresh = await authApi.me();
-      setShop(fresh.shop || null);
-      setUser((prev) => {
-        const next = prev
-          ? { ...prev, name: fresh.user.name, role: fresh.user.role }
-          : prev;
-        if (next) {
-          SecureStore.setItemAsync(
-            'session',
-            JSON.stringify({ token: next.token, user: next, shop: fresh.shop }),
-          ).catch(() => {});
-        }
-        return next;
-      });
-      return fresh.shop;
+      const nextUser = {
+        token: user.token,
+        email: fresh.user.email,
+        name: fresh.user.name,
+        role: fresh.user.role,
+        shopId: fresh.user.shopId,
+      };
+      const nextShop = fresh.shop || null;
+
+      setUser(nextUser);
+      setShop(nextShop);
+
+      await SecureStore.setItemAsync(
+        'session',
+        JSON.stringify({ token: nextUser.token, user: nextUser, shop: nextShop }),
+      );
+
+      return nextShop;
     } catch (err) {
       console.warn('refreshShop failed', err.message);
       return null;
@@ -141,6 +170,7 @@ export function AuthProvider({ children }) {
         signIn,
         signUp,
         signOut,
+        updateUser,
         refreshShop,
       }}
     >

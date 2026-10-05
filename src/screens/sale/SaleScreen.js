@@ -5,19 +5,20 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import Toast from 'react-native-toast-message';
 
 import { productsApi } from '../../services/products';
 import ProductTile from '../../components/ProductTile';
 import CheckInSheet from '../../components/CheckInSheet';
+import LockOverlay from '../../components/LockOverlay';
 import { useCart } from '../../context/CartContext';
 import { useShift } from '../../context/ShiftContext';
 import { formatKsh } from '../../utils/format';
 import { colors, spacing, typography, radii, shadows } from '../../theme';
 
 const NUM_COLUMNS = 2;
-const TILE_GAP = spacing.sm;
-const CART_BAR_HEIGHT = 96;
+const SKELETON_COUNT = 6;
 
 export default function SaleScreen({ navigation }) {
   const [products, setProducts] = useState([]);
@@ -27,12 +28,11 @@ export default function SaleScreen({ navigation }) {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
 
-  // 'checkin' | 'checkout' | null
   const [sheetMode, setSheetMode] = useState(null);
-  // 'checkout' when the sheet was opened because Charge needs a shift
   const [pendingIntent, setPendingIntent] = useState(null);
 
-  const { items, addToCart, updateQty, removeItem, count, subtotal } = useCart();
+  // Cart bar shows `total`, not `subtotal` — matches what Checkout will charge.
+  const { items, addToCart, updateQty, removeItem, count, total } = useCart();
   const { staff, staffCount } = useShift();
 
   const qtyByProduct = useMemo(() => {
@@ -41,7 +41,6 @@ export default function SaleScreen({ navigation }) {
     return map;
   }, [items]);
 
-  // Only require check-in when the shop has more than one active user
   const needsCheckIn = staffCount >= 2 && !staff;
 
   const loadProducts = useCallback(async (isRefresh = false) => {
@@ -88,10 +87,14 @@ export default function SaleScreen({ navigation }) {
     });
   }, [products, search, category]);
 
-  const handleAdd = (product) => addToCart(product);
+  const handleAdd = (product) => {
+    Haptics.selectionAsync().catch(() => {});
+    addToCart(product);
+  };
 
   const handleRemoveOne = (product) => {
     const current = qtyByProduct[product.id] || 0;
+    Haptics.selectionAsync().catch(() => {});
     if (current <= 1) removeItem(product.id);
     else updateQty(product.id, current - 1);
   };
@@ -118,9 +121,7 @@ export default function SaleScreen({ navigation }) {
     const wasPending = pendingIntent === 'checkout';
     setSheetMode(null);
     setPendingIntent(null);
-    if (wasPending) {
-      navigation.navigate('Checkout');
-    }
+    if (wasPending) navigation.navigate('Checkout');
   };
 
   const openShiftSheet = () => {
@@ -130,8 +131,19 @@ export default function SaleScreen({ navigation }) {
   if (loading) {
     return (
       <SafeAreaView style={styles.root} edges={['top']}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        <View style={styles.header}>
+          <Text style={styles.title}>New Sale</Text>
+        </View>
+        <View style={styles.searchWrap}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <View style={styles.searchSkeleton} />
+        </View>
+        <View style={styles.skeletonGrid}>
+          {Array.from({ length: SKELETON_COUNT }).map((_, i) => (
+            <View key={i} style={styles.skeletonTileWrap}>
+              <View style={styles.skeletonTile} />
+            </View>
+          ))}
         </View>
       </SafeAreaView>
     );
@@ -179,8 +191,10 @@ export default function SaleScreen({ navigation }) {
           <TouchableOpacity
             style={styles.scanButton}
             onPress={() => navigation.navigate('Scanner', { purpose: 'sale' })}
+            activeOpacity={0.85}
           >
-            <Ionicons name="barcode-outline" size={20} color={colors.primary} />
+            <Ionicons name="barcode-outline" size={18} color={colors.primary} />
+            <Text style={styles.scanButtonText}>Scan</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -233,10 +247,7 @@ export default function SaleScreen({ navigation }) {
         keyExtractor={(item) => item.id}
         numColumns={NUM_COLUMNS}
         columnWrapperStyle={styles.row}
-        contentContainerStyle={[
-          styles.grid,
-          { paddingBottom: items.length > 0 ? CART_BAR_HEIGHT + spacing.xxl : spacing.xxxl },
-        ]}
+        contentContainerStyle={styles.grid}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -268,9 +279,13 @@ export default function SaleScreen({ navigation }) {
             <Text style={styles.cartCount}>
               {count} {count === 1 ? 'item' : 'items'}
             </Text>
-            <Text style={styles.cartTotal}>{formatKsh(subtotal)}</Text>
+            <Text style={styles.cartTotal}>{formatKsh(total)}</Text>
           </View>
-          <TouchableOpacity style={styles.checkoutBtn} onPress={handleCheckout}>
+          <TouchableOpacity
+            style={styles.checkoutBtn}
+            onPress={handleCheckout}
+            activeOpacity={0.85}
+          >
             <Text style={styles.checkoutText}>Charge</Text>
             <Ionicons name="arrow-forward" size={18} color="#fff" />
           </TouchableOpacity>
@@ -283,6 +298,7 @@ export default function SaleScreen({ navigation }) {
         onClose={handleSheetClose}
         onSuccess={handleSheetSuccess}
       />
+      <LockOverlay />
     </SafeAreaView>
   );
 }
@@ -322,10 +338,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
+
   scanButton: {
-    width: 40, height: 40, borderRadius: radii.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    height: 40,
+    borderRadius: radii.md,
     backgroundColor: colors.primarySoft,
-    alignItems: 'center', justifyContent: 'center',
+  },
+  scanButtonText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '700',
   },
 
   shiftPill: {
@@ -362,6 +388,13 @@ const styles = StyleSheet.create({
     color: colors.text,
     padding: 0,
   },
+  searchSkeleton: {
+    flex: 1,
+    height: 14,
+    borderRadius: 4,
+    backgroundColor: colors.border,
+    opacity: 0.4,
+  },
 
   chipsScroll: { flexGrow: 0, marginTop: spacing.md, marginBottom: spacing.sm },
   chipsRow: { paddingHorizontal: spacing.screenPadding, gap: spacing.sm },
@@ -380,9 +413,29 @@ const styles = StyleSheet.create({
   chipTextActive: { color: '#fff' },
 
   list: { flex: 1 },
-  grid: { paddingHorizontal: spacing.screenPadding - TILE_GAP },
+  grid: {
+    paddingHorizontal: spacing.screenPadding - spacing.sm / 2,
+    paddingBottom: spacing.xxxl,
+  },
   row: { justifyContent: 'space-between' },
   tileWrap: { flex: 1 / NUM_COLUMNS, maxWidth: '50%' },
+
+  skeletonGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: spacing.screenPadding - spacing.sm / 2,
+    marginTop: spacing.md,
+  },
+  skeletonTileWrap: {
+    width: '50%',
+    padding: spacing.sm / 2,
+  },
+  skeletonTile: {
+    height: 132,
+    borderRadius: radii.lg,
+    backgroundColor: colors.surface,
+    opacity: 0.7,
+  },
 
   emptyBox: {
     flex: 1, justifyContent: 'center', alignItems: 'center',
@@ -394,24 +447,28 @@ const styles = StyleSheet.create({
   },
 
   cartBar: {
-    position: 'absolute',
-    left: spacing.screenPadding,
-    right: spacing.screenPadding,
-    bottom: spacing.screenPadding,
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    ...shadows.lg,
+    marginHorizontal: spacing.screenPadding,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    paddingVertical: spacing.sm,
+    paddingLeft: spacing.lg,
+    paddingRight: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.md,
   },
-  cartInfo: { flex: 1, marginLeft: spacing.sm },
+  cartInfo: { flex: 1 },
   cartCount: { ...typography.caption, color: colors.textMuted },
   cartTotal: { ...typography.price, color: colors.text, marginTop: 2 },
   checkoutBtn: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xl,
+    height: 44,
     borderRadius: radii.md, gap: spacing.sm,
   },
   checkoutText: { ...typography.button, color: '#fff' },

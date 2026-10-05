@@ -11,7 +11,7 @@ import { useShift } from '../context/ShiftContext';
 import { colors, spacing, typography, radii } from '../theme';
 
 export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
-  const { staff: currentStaff, checkIn, checkOut } = useShift();
+  const { staff: currentStaff, openShift, checkOut, lock } = useShift();
   const [pin, setPin] = useState('');
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -41,8 +41,8 @@ export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
     setError(null);
     try {
       const data = await staffApi.verifyPin(pin);
+      await openShift(data.staff);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      await checkIn(data.staff);
       if (onSuccess) onSuccess(data.staff);
       onClose();
     } catch (err) {
@@ -54,12 +54,18 @@ export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
     }
   };
 
-  const handleCheckOut = async () => {
+  const handleStepAway = async () => {
+    await lock();
+    onClose();
+  };
+
+  const handleEndShift = async () => {
+    // Commit 3 will replace this with the cash count + Z-report flow.
     await checkOut();
     onClose();
   };
 
-  // ── Check out mode ──
+  // ── Check out mode — two-option menu ──
   if (mode === 'checkout') {
     return (
       <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -86,12 +92,31 @@ export default function CheckInSheet({ visible, mode, onClose, onSuccess }) {
             </View>
 
             <TouchableOpacity
-              style={styles.checkOutBtn}
-              onPress={handleCheckOut}
+              style={styles.stepAwayBtn}
+              onPress={handleStepAway}
               activeOpacity={0.85}
             >
-              <Ionicons name="log-out-outline" size={18} color="#fff" />
-              <Text style={styles.checkOutText}>Check out</Text>
+              <Ionicons name="pause-circle-outline" size={20} color={colors.primary} />
+              <View style={styles.btnBody}>
+                <Text style={styles.stepAwayText}>Step away</Text>
+                <Text style={styles.stepAwayHint}>
+                  Take a break. Shift stays open.
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.endShiftBtn}
+              onPress={handleEndShift}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="log-out-outline" size={20} color="#fff" />
+              <View style={styles.btnBody}>
+                <Text style={styles.endShiftText}>End shift</Text>
+                <Text style={styles.endShiftHint}>
+                  Finish for the day. Cash count and report.
+                </Text>
+              </View>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
@@ -250,16 +275,53 @@ const styles = StyleSheet.create({
   whoBody: { flex: 1 },
   whoName: { ...typography.bodyMedium, color: colors.text, fontWeight: '700' },
   whoRole: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
-  checkOutBtn: {
+
+  stepAwayBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.sm,
+  },
+  stepAwayText: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    fontWeight: '700',
+  },
+  stepAwayHint: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+
+  endShiftBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     borderRadius: radii.md,
     backgroundColor: colors.primary,
   },
-  checkOutText: { ...typography.button, color: '#fff' },
+  endShiftText: {
+    ...typography.bodyMedium,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  endShiftHint: {
+    ...typography.tiny,
+    color: '#fff',
+    opacity: 0.85,
+    marginTop: 2,
+  },
+
+  btnBody: { flex: 1 },
+
   cancelBtn: {
     paddingVertical: spacing.md,
     alignItems: 'center',

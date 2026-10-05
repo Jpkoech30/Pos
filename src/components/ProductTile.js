@@ -1,101 +1,85 @@
-import React, { useRef } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet, Animated,
-} from 'react-native';
+import React from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-
+import { formatKsh } from '../utils/format';
 import { colors, spacing, typography, radii, shadows } from '../theme';
 
-const CATEGORY_META = {
-  Coffee:          { icon: 'cafe-outline',       color: '#92400e', bg: '#fef3c7' },
-  Grocery:         { icon: 'basket-outline',     color: '#065f46', bg: '#d1fae5' },
-  Drinks:          { icon: 'water-outline',      color: '#075985', bg: '#e0f2fe' },
-  Snacks:          { icon: 'fast-food-outline',  color: '#9a3412', bg: '#ffedd5' },
-  'Personal care': { icon: 'heart-outline',      color: '#9d174d', bg: '#fce7f3' },
-  Household:       { icon: 'home-outline',       color: '#5b21b6', bg: '#ede9fe' },
-  Pastry:          { icon: 'fast-food-outline',  color: '#9a3412', bg: '#ffedd5' },
-  Sandwich:        { icon: 'restaurant-outline', color: '#065f46', bg: '#d1fae5' },
-  Salad:           { icon: 'leaf-outline',       color: '#166534', bg: '#dcfce7' },
-  Drink:           { icon: 'water-outline',      color: '#075985', bg: '#e0f2fe' },
-  Other:           { icon: 'cube-outline',       color: colors.primary, bg: colors.primarySoft },
-  Default:         { icon: 'cube-outline',       color: colors.primary, bg: colors.primarySoft },
-};
-
-export default function ProductTile({ product, quantity = 0, onPress, onLongPress }) {
-  const meta = CATEGORY_META[product.category] || CATEGORY_META.Default;
-  const scale = useRef(new Animated.Value(1)).current;
+export default function ProductTile({
+  product,
+  quantity = 0,
+  onPress,
+  onLongPress,
+}) {
   const inCart = quantity > 0;
 
-  const animateTap = () => {
-    Animated.sequence([
-      Animated.timing(scale, {
-        toValue: 0.94,
-        duration: 70,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scale, {
-        toValue: 1,
-        friction: 5,
-        tension: 220,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  };
-
-  const handlePress = () => {
-    animateTap();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    onPress?.(product);
-  };
-
-  const handleLongPress = () => {
-    if (!inCart) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    onLongPress?.(product);
-  };
+  const handleAdd = () => onPress?.(product);
+  const handleRemoveOne = () => onLongPress?.(product);
 
   return (
-    <Animated.View style={[styles.tileWrap, { transform: [{ scale }] }]}>
-      <TouchableOpacity
-        style={[styles.tile, inCart && styles.tileActive]}
-        onPress={handlePress}
-        onLongPress={handleLongPress}
-        delayLongPress={350}
-        activeOpacity={0.9}
-      >
-        {inCart && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>×{quantity}</Text>
-          </View>
-        )}
+    <TouchableOpacity
+      style={[styles.tile, inCart && styles.tileActive]}
+      onPress={handleAdd}
+      onLongPress={handleRemoveOne}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={
+        inCart
+          ? `${product.name}, ${quantity} in cart. Tap to add another.`
+          : `${product.name}. Tap to add to cart.`
+      }
+    >
+      <View style={styles.media}>
+        <Ionicons
+          name="cube-outline"
+          size={26}
+          color={inCart ? colors.primary : colors.textMuted}
+        />
+      </View>
 
-        <View style={[styles.iconCircle, { backgroundColor: meta.bg }]}>
-          <Ionicons name={meta.icon} size={26} color={meta.color} />
+      <Text style={styles.name} numberOfLines={2}>
+        {product.name}
+      </Text>
+      <Text style={styles.price}>{formatKsh(product.price)}</Text>
+
+      {inCart && (
+        <View style={styles.controls}>
+          <TouchableOpacity
+            style={styles.qtyBtn}
+            onPress={handleRemoveOne}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove one ${product.name}`}
+          >
+            <Ionicons name="remove" size={18} color={colors.primary} />
+          </TouchableOpacity>
+
+          <Text style={styles.qtyValue}>{quantity}</Text>
+
+          <TouchableOpacity
+            style={styles.qtyBtn}
+            onPress={handleAdd}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={`Add another ${product.name}`}
+          >
+            <Ionicons name="add" size={18} color={colors.primary} />
+          </TouchableOpacity>
         </View>
-
-        <Text style={styles.name} numberOfLines={2}>
-          {product.name}
-        </Text>
-        <Text style={styles.price}>KSh {Number(product.price).toFixed(0)}</Text>
-      </TouchableOpacity>
-    </Animated.View>
+      )}
+    </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  tileWrap: {
-    margin: spacing.xs,
-  },
   tile: {
+    flex: 1,
+    margin: spacing.sm / 2,
+    padding: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 140,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderColor: 'transparent',
+    minHeight: 132,
     ...shadows.sm,
   },
   tileActive: {
@@ -103,45 +87,49 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primarySoft,
   },
 
-  badge: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.primary,
-    minWidth: 28,
-    height: 24,
-    paddingHorizontal: 6,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1,
-  },
-  badgeText: {
-    ...typography.tiny,
-    color: '#fff',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-
-  iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  media: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
+
   name: {
-    ...typography.caption,
+    ...typography.bodyMedium,
     color: colors.text,
     fontWeight: '600',
-    textAlign: 'center',
-    marginTop: spacing.xs,
+    minHeight: 36,
   },
   price: {
-    ...typography.caption,
+    ...typography.price,
+    color: colors.text,
+    marginTop: spacing.xs,
+  },
+
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
+    paddingHorizontal: 4,
+    height: 32,
+  },
+  qtyBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyValue: {
+    ...typography.bodyMedium,
     color: colors.primary,
     fontWeight: '700',
-    marginTop: 2,
+    minWidth: 24,
+    textAlign: 'center',
   },
 });

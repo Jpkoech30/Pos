@@ -38,8 +38,7 @@ export default function StkPushScreen({ navigation }) {
     };
   }, []);
 
-  // Re-poll on app resume — handles the case where the app was
-  // backgrounded while waiting for the PIN.
+  // Re-poll when the app is focused after being backgrounded
   useEffect(() => {
     const unsub = navigation.addListener('focus', async () => {
       if (phase === 'waiting' && orderId) {
@@ -52,7 +51,7 @@ export default function StkPushScreen({ navigation }) {
             if (s.status === 'completed') clearCart();
           }
         } catch {
-          // Ignore — normal polling will keep trying.
+          // Ignore — polling will keep trying
         }
       }
     });
@@ -74,7 +73,7 @@ export default function StkPushScreen({ navigation }) {
       try {
         const elapsed = Date.now() - startedAt;
 
-        // Ask Safaricom exactly once, after 30 seconds of pending.
+        // After 30 seconds of pending, ask Safaricom directly once.
         // This catches the case where the callback never arrived.
         if (elapsed > QUERY_AFTER_MS && !queried) {
           queried = true;
@@ -88,7 +87,7 @@ export default function StkPushScreen({ navigation }) {
               return;
             }
           } catch {
-            // Query failed — fall through to normal status check.
+            // Query failed — fall through to normal status check
           }
         }
 
@@ -100,7 +99,7 @@ export default function StkPushScreen({ navigation }) {
           if (s.status === 'completed') clearCart();
         }
       } catch {
-        // Transient — keep polling.
+        // Transient — keep polling
       }
     }, POLL_INTERVAL);
 
@@ -145,7 +144,7 @@ export default function StkPushScreen({ navigation }) {
       try {
         await mpesaApi.cancel(orderId);
       } catch {
-        // Best-effort — the sweeper will catch it.
+        // Best-effort — the sweeper will catch it
       }
     }
     setPhase('input');

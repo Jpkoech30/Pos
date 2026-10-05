@@ -50,6 +50,7 @@ export default function ProductFormScreen({ navigation, route }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimeoutRef = useRef(null);
 
+  // Handle a scanned barcode arriving via route params
   useEffect(() => {
     const scanned = route.params?.scannedBarcode;
     if (!scanned) return;
@@ -126,7 +127,11 @@ export default function ProductFormScreen({ navigation, route }) {
     if (item.typicalBarcode && !barcode) setBarcode(item.typicalBarcode);
     setShowSuggestions(false);
     setSuggestions([]);
-    Toast.show({ type: 'success', text1: 'Filled from catalog', text2: 'Adjust as needed' });
+    Toast.show({
+      type: 'success',
+      text1: 'Filled from catalog',
+      text2: 'Adjust as needed',
+    });
   };
 
   const handleSave = async () => {
@@ -263,7 +268,7 @@ export default function ProductFormScreen({ navigation, route }) {
             </View>
           </View>
 
-          {/* ─── Step 2: How much? ─── */}
+          {/* ─── Step 2: Set your prices ─── */}
           <StepHeader n={2} title="Set your prices" />
           <View style={styles.card}>
             <View>
@@ -360,7 +365,11 @@ export default function ProductFormScreen({ navigation, route }) {
 
             {costPrice === '' && priceNum > 0 && (
               <View style={styles.infoBox}>
-                <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={16}
+                  color={colors.textMuted}
+                />
                 <Text style={styles.infoText}>
                   Add a cost price so this product appears in your profit reports
                 </Text>
@@ -368,7 +377,7 @@ export default function ProductFormScreen({ navigation, route }) {
             )}
           </View>
 
-          {/* ─── Step 3: Stock (quick) ─── */}
+          {/* ─── Step 3: Stock ─── */}
           <StepHeader n={3} title="How many do you have?" optional />
           <View style={styles.card}>
             <TextInput
@@ -384,7 +393,7 @@ export default function ProductFormScreen({ navigation, route }) {
             </Text>
           </View>
 
-          {/* ─── Advanced (collapsible) ─── */}
+          {/* ─── Advanced ─── */}
           <TouchableOpacity
             style={styles.advancedToggle}
             onPress={() => setShowAdvanced(!showAdvanced)}
@@ -513,7 +522,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { padding: spacing.screenPadding, paddingBottom: spacing.xxxl },
 
-  // Step header
   stepHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -580,7 +588,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // Suggestions
   suggestions: {
     marginTop: spacing.xs,
     backgroundColor: colors.surface,
@@ -627,7 +634,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Margin
   marginBox: {
     marginTop: spacing.lg,
     padding: spacing.md,
@@ -641,7 +647,6 @@ const styles = StyleSheet.create({
   marginText: { ...typography.bodyMedium, fontWeight: '700' },
   marginSub: { ...typography.caption, marginLeft: 26 },
 
-  // Info box
   infoBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -660,16 +665,17 @@ const styles = StyleSheet.create({
 
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: radii.pill,
     backgroundColor: colors.background,
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
   chipTextActive: { color: '#fff' },
 
-  // Advanced toggle
   advancedToggle: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -695,8 +701,10 @@ const styles = StyleSheet.create({
     ...shadows.sm,
   },
   barcodeStatus: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: spacing.xs, marginTop: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: {
@@ -712,7 +720,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   saveBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
     backgroundColor: colors.primary,
     paddingVertical: spacing.lg,

@@ -1,7 +1,6 @@
 import React from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Share,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,8 +44,15 @@ function buildReceiptText(order, shop) {
   });
 
   lines.push('');
-  lines.push(line('Subtotal', formatKsh(order.subtotal)));
-  lines.push(line('Tax', formatKsh(order.tax)));
+
+  const isVat = order.vatRate > 0;
+  if (isVat) {
+    lines.push(line('Subtotal', formatKsh(order.subtotal)));
+    lines.push(line(
+      order.taxInclusive ? 'VAT (included)' : `VAT (${order.vatRate}%)`,
+      formatKsh(order.vatAmount),
+    ));
+  }
   lines.push(line('TOTAL', formatKsh(order.total)));
   lines.push('');
 
@@ -92,12 +98,11 @@ export default function ReceiptScreen({ navigation, route }) {
   });
   const paymentLabel = PAYMENT_LABELS[order.paymentMethod] || order.paymentMethod;
   const failed = order.paymentStatus === 'failed';
+  const isVat = order.vatRate > 0;
 
   const handleShare = async () => {
     try {
-      await Share.share({
-        message: buildReceiptText(order, shop),
-      });
+      await Share.share({ message: buildReceiptText(order, shop) });
     } catch (err) {
       Toast.show({ type: 'error', text1: 'Share failed', text2: err.message });
     }
@@ -139,14 +144,20 @@ export default function ReceiptScreen({ navigation, route }) {
 
         <Text style={styles.sectionLabel}>Totals</Text>
         <View style={styles.card}>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Subtotal</Text>
-            <Text style={styles.totalValue}>{formatKsh(order.subtotal)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Tax</Text>
-            <Text style={styles.totalValue}>{formatKsh(order.tax)}</Text>
-          </View>
+          {isVat && (
+            <>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Subtotal (excl. VAT)</Text>
+                <Text style={styles.totalValue}>{formatKsh(order.subtotal)}</Text>
+              </View>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>
+                  VAT {order.taxInclusive ? '(included)' : `(${order.vatRate}%)`}
+                </Text>
+                <Text style={styles.totalValue}>{formatKsh(order.vatAmount)}</Text>
+              </View>
+            </>
+          )}
           <View style={[styles.totalRow, styles.grandTotalRow]}>
             <Text style={styles.grandTotalLabel}>Total</Text>
             <Text style={styles.grandTotalValue}>{formatKsh(order.total)}</Text>
@@ -181,6 +192,13 @@ export default function ReceiptScreen({ navigation, route }) {
             <View style={styles.metaRow}>
               <Text style={styles.metaLabel}>M-Pesa ref</Text>
               <Text style={styles.metaValue}>{order.mpesaReceiptNumber}</Text>
+            </View>
+          )}
+
+          {order.staffName && (
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Served by</Text>
+              <Text style={styles.metaValue}>{order.staffName}</Text>
             </View>
           )}
 
@@ -222,7 +240,11 @@ const styles = StyleSheet.create({
   emptyText: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.lg },
   scroll: { padding: spacing.screenPadding, paddingBottom: spacing.xxxl },
 
-  successHeader: { alignItems: 'center', paddingVertical: spacing.xl, marginBottom: spacing.md },
+  successHeader: {
+    alignItems: 'center',
+    paddingVertical: spacing.xl,
+    marginBottom: spacing.md,
+  },
   checkCircle: {
     width: 84, height: 84, borderRadius: 42,
     backgroundColor: colors.success,
@@ -232,13 +254,15 @@ const styles = StyleSheet.create({
   },
   checkCircleFail: { backgroundColor: colors.danger },
   successTitle: { ...typography.h2, color: colors.text },
-  successAmount: { ...typography.h1, color: colors.text, marginTop: spacing.xs },
+  successAmount: { ...typography.priceLarge, color: colors.text, marginTop: spacing.xs },
   successMeta: { ...typography.caption, color: colors.textMuted, marginTop: spacing.xs },
 
   sectionLabel: {
-    ...typography.caption, color: colors.textMuted,
-    textTransform: 'uppercase', letterSpacing: 1, fontWeight: '700',
-    marginTop: spacing.lg, marginBottom: spacing.sm,
+    ...typography.overline,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   card: {
     backgroundColor: colors.surface,
@@ -254,20 +278,26 @@ const styles = StyleSheet.create({
   itemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   itemQty: { ...typography.body, color: colors.textMuted, width: 32 },
   itemName: { ...typography.body, color: colors.text, flex: 1 },
-  itemPrice: { ...typography.body, color: colors.text, marginLeft: spacing.sm },
+  itemPrice: { ...typography.price, color: colors.text, marginLeft: spacing.sm },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
 
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs },
+  totalRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+  },
   totalLabel: { ...typography.body, color: colors.textSecondary },
-  totalValue: { ...typography.body, color: colors.text },
+  totalValue: { ...typography.price, color: colors.text },
   grandTotalRow: {
     marginTop: spacing.sm, paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border,
   },
   grandTotalLabel: { ...typography.h3, color: colors.text },
-  grandTotalValue: { ...typography.h3, color: colors.text },
+  grandTotalValue: { ...typography.priceLarge, color: colors.text },
 
-  metaRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs },
+  metaRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+  },
   metaLabel: { ...typography.body, color: colors.textSecondary },
   metaValue: { ...typography.body, color: colors.text },
 
@@ -289,9 +319,7 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     backgroundColor: colors.surface,
   },
-  shareText: {
-    ...typography.button, color: colors.primary, fontSize: 15,
-  },
+  shareText: { ...typography.button, color: colors.primary, fontSize: 15 },
   doneBtn: {
     flex: 1,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

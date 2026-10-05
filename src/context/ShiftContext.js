@@ -20,25 +20,24 @@ export function ShiftProvider({ children }) {
   const [staffCount, setStaffCount] = useState(0);
   const prevUserRef = useRef(null);
 
-  // Restore shift on cold start
   useEffect(() => {
     (async () => {
       try {
         const raw = await SecureStore.getItemAsync(KEY);
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed?.id) {
+          if (parsed && parsed.id) {
             setStaff(parsed);
             setCurrentStaffId(parsed.id);
           }
         }
-      } catch {}
+      } catch (e) {
+        // ignore
+      }
       setLoading(false);
     })();
   }, []);
 
-  // Fetch active staff count — SaleScreen uses it to decide whether
-  // to enforce check-in before charging
   useEffect(() => {
     if (!user) {
       setStaffCount(0);
@@ -49,13 +48,12 @@ export function ShiftProvider({ children }) {
         const data = await staffApi.list();
         const active = (data.staff || []).filter((s) => s.isActive).length;
         setStaffCount(active);
-      } catch {
-        // On error, default to 0 — allows sales to go through
+      } catch (e) {
+        // leave at 0
       }
     })();
   }, [user]);
 
-  // Clear shift when user logs out
   useEffect(() => {
     if (!user && prevUserRef.current) {
       checkOut();

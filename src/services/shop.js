@@ -6,6 +6,13 @@ export const shopApi = {
   update: ({ name, mpesaNumber, address }) =>
     api.patch('/shop', { name, mpesaNumber, address }).then((r) => r.data),
 
+  setTaxConfig: ({ vatRegistered, vatRate, pricesIncludeVat }) =>
+    api.put('/shop/tax', {
+      vatRegistered,
+      vatRate,
+      pricesIncludeVat,
+    }).then((r) => r.data),
+
   setDaraja: ({ consumerKey, consumerSecret, passkey, shortcode, env }) =>
     api.put('/shop/daraja', {
       consumerKey,

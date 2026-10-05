@@ -13,6 +13,7 @@ export default function CheckoutScreen({ navigation }) {
   const {
     items, subtotal, tax, total,
     updateQty, removeItem, clearCart,
+    vatRegistered, taxInclusive,
   } = useCart();
   const { shop } = useAuth();
 
@@ -103,14 +104,20 @@ export default function CheckoutScreen({ navigation }) {
 
         <Text style={styles.sectionLabelStandalone}>Totals</Text>
         <View style={styles.card}>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Subtotal</Text>
-            <Text style={styles.totalValue}>{formatKsh(subtotal)}</Text>
-          </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>Tax</Text>
-            <Text style={styles.totalValue}>{formatKsh(tax)}</Text>
-          </View>
+          {vatRegistered && (
+            <>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Subtotal (excl. VAT)</Text>
+                <Text style={styles.totalValue}>{formatKsh(subtotal)}</Text>
+              </View>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>
+                  VAT {taxInclusive ? '(included)' : `(${shop?.vatRate || 16}%)`}
+                </Text>
+                <Text style={styles.totalValue}>{formatKsh(tax)}</Text>
+              </View>
+            </>
+          )}
           <View style={[styles.totalRow, styles.grandTotalRow]}>
             <Text style={styles.grandTotalLabel}>Total</Text>
             <Text style={styles.grandTotalValue}>{formatKsh(total)}</Text>
@@ -194,18 +201,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   sectionLabel: {
-    ...typography.caption,
+    ...typography.overline,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: '700',
   },
   sectionLabelStandalone: {
-    ...typography.caption,
+    ...typography.overline,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: '700',
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
@@ -256,9 +259,8 @@ const styles = StyleSheet.create({
   },
 
   itemPrice: {
-    ...typography.bodyMedium,
+    ...typography.price,
     color: colors.text,
-    fontWeight: '600',
     minWidth: 80,
     textAlign: 'right',
   },
@@ -276,7 +278,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   totalLabel: { ...typography.body, color: colors.textSecondary },
-  totalValue: { ...typography.body, color: colors.text },
+  totalValue: { ...typography.price, color: colors.text },
   grandTotalRow: {
     marginTop: spacing.sm,
     paddingTop: spacing.sm,
@@ -284,7 +286,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.border,
   },
   grandTotalLabel: { ...typography.h3, color: colors.text },
-  grandTotalValue: { ...typography.h3, color: colors.text },
+  grandTotalValue: { ...typography.priceLarge, color: colors.text },
 
   payRow: { flexDirection: 'row', gap: spacing.sm },
   payTile: {

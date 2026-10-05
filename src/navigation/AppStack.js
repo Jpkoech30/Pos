@@ -31,6 +31,7 @@ import ChangePasswordScreen from '../screens/profile/ChangePasswordScreen';
 import ShopSettingsScreen from '../screens/profile/ShopSettingsScreen';
 import PaymentSettingsScreen from '../screens/profile/PaymentSettingsScreen';
 import TeamScreen from '../screens/profile/TeamScreen';
+import TaxCenterScreen from '../screens/profile/TaxCenterScreen';
 
 import { colors } from '../theme';
 
@@ -85,6 +86,7 @@ function ProfileStackNavigator() {
       <ProfileStack.Screen name="ShopSettings" component={ShopSettingsScreen} options={{ title: 'Shop settings' }} />
       <ProfileStack.Screen name="PaymentSettings" component={PaymentSettingsScreen} options={{ title: 'STK Push' }} />
       <ProfileStack.Screen name="Team" component={TeamScreen} options={{ title: 'Team' }} />
+      <ProfileStack.Screen name="TaxCenter" component={TaxCenterScreen} options={{ title: 'Tax Center' }} />
     </ProfileStack.Navigator>
   );
 }

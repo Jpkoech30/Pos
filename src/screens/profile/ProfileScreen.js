@@ -32,6 +32,10 @@ export default function ProfileScreen({ navigation }) {
     .join('')
     .toUpperCase();
 
+  const taxHint = shop?.vatRegistered
+    ? `VAT · ${shop.vatRate || 16}%`
+    : 'Turnover Tax · 1.5%';
+
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -88,6 +92,21 @@ export default function ProfileScreen({ navigation }) {
                 label="STK Push"
                 hint={shop?.stkEnabled ? 'Configured' : 'Not configured'}
                 onPress={() => navigation.navigate('PaymentSettings')}
+              />
+            </View>
+          </>
+        )}
+
+        {/* Tax — owner only */}
+        {isOwner && (
+          <>
+            <Text style={styles.sectionLabel}>Tax</Text>
+            <View style={styles.card}>
+              <Row
+                icon="calculator-outline"
+                label="Tax Center"
+                hint={taxHint}
+                onPress={() => navigation.navigate('TaxCenter')}
               />
             </View>
           </>
@@ -189,10 +208,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   userInfo: { flex: 1 },
-  userName: {
-    ...typography.h3,
-    color: colors.text,
-  },
+  userName: { ...typography.h3, color: colors.text },
   userEmail: {
     ...typography.caption,
     color: colors.textMuted,
@@ -232,10 +248,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     fontWeight: '700',
   },
-  shopName: {
-    ...typography.h3,
-    color: colors.text,
-  },
+  shopName: { ...typography.h3, color: colors.text },
   shopMeta: {
     ...typography.caption,
     color: colors.textMuted,
@@ -259,11 +272,9 @@ const styles = StyleSheet.create({
   },
 
   sectionLabel: {
-    ...typography.caption,
+    ...typography.overline,
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 1,
-    fontWeight: '700',
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
     marginLeft: spacing.xs,

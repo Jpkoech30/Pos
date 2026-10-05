@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Toast from 'react-native-toast-message';
 
 import { productsApi } from '../../services/products';
+import { stockApi } from '../../services/stock';
 import ProductListRow from '../../components/ProductListRow';
 import StockAdjustSheet from '../../components/StockAdjustSheet';
 import FilterSheet from '../../components/FilterSheet';
@@ -26,8 +27,8 @@ export default function ProductsScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState('catalog');
   const [stockTarget, setStockTarget] = useState(null);
+  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
 
-  // Lifted filter/sort state so Stock view can set them
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [sort, setSort] = useState('name');
 
@@ -57,10 +58,17 @@ export default function ProductsScreen({ navigation }) {
   };
 
   const handleStockSave = async (product, nextStock) => {
-    await productsApi.update(product.id, { stock: nextStock });
+    const delta = nextStock - Number(product.stock);
+    if (delta === 0) return;
+
+    const reason = delta > 0 ? 'restock' : 'correction';
+    await productsApi.adjustStock(product.id, { change: delta, reason });
+
     setProducts((prev) =>
       prev.map((p) => (p.id === product.id ? { ...p, stock: nextStock } : p)),
     );
+    setActivityRefreshKey((k) => k + 1);
+
     Toast.show({
       type: 'success',
       text1: 'Stock updated',
@@ -68,11 +76,9 @@ export default function ProductsScreen({ navigation }) {
     });
   };
 
-  // Called by Stock view when a summary card is tapped.
-  // Switches to the Catalog tab with a preset filter.
   const jumpToCatalogWithFilter = (partial) => {
     setFilters({ ...DEFAULT_FILTERS, ...partial });
-    setSort('stockLow'); // sort low first — most useful default for these jumps
+    setSort('stockLow');
     setView('catalog');
   };
 
@@ -99,19 +105,13 @@ export default function ProductsScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Segmented control */}
       <View style={styles.segment}>
         <TouchableOpacity
           style={[styles.segmentBtn, view === 'catalog' && styles.segmentBtnActive]}
           onPress={() => setView('catalog')}
           activeOpacity={0.8}
         >
-          <Text
-            style={[
-              styles.segmentText,
-              view === 'catalog' && styles.segmentTextActive,
-            ]}
-          >
+          <Text style={[styles.segmentText, view === 'catalog' && styles.segmentTextActive]}>
             Catalog
           </Text>
         </TouchableOpacity>
@@ -120,12 +120,7 @@ export default function ProductsScreen({ navigation }) {
           onPress={() => setView('stock')}
           activeOpacity={0.8}
         >
-          <Text
-            style={[
-              styles.segmentText,
-              view === 'stock' && styles.segmentTextActive,
-            ]}
-          >
+          <Text style={[styles.segmentText, view === 'stock' && styles.segmentTextActive]}>
             Stock
           </Text>
         </TouchableOpacity>
@@ -150,6 +145,7 @@ export default function ProductsScreen({ navigation }) {
           onRefresh={onRefresh}
           onStockPress={setStockTarget}
           onFilterTap={jumpToCatalogWithFilter}
+          activityRefreshKey={activityRefreshKey}
         />
       )}
 
@@ -163,9 +159,6 @@ export default function ProductsScreen({ navigation }) {
   );
 }
 
-// ─────────────────────────────────────────────
-// Catalog view
-// ─────────────────────────────────────────────
 function CatalogView({
   products, navigation, refreshing, onRefresh, onStockPress,
   filters, setFilters, sort, setSort,
@@ -464,10 +457,9 @@ function CatalogView({
   );
 }
 
-// ─────────────────────────────────────────────
-// Stock view
-// ─────────────────────────────────────────────
-function StockView({ products, refreshing, onRefresh, onStockPress, onFilterTap }) {
+function StockView({
+  products, refreshing, onRefresh, onStockPress, onFilterTap, activityRefreshKey,
+}) {
   const [subView, setSubView] = useState('attention');
 
   const stats = useMemo(() => {
@@ -521,7 +513,6 @@ function StockView({ products, refreshing, onRefresh, onStockPress, onFilterTap 
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* Stock value — not tappable, it's an aggregate */}
       <View style={[styles.summaryCard, styles.summaryCardPrimary]}>
         <Text style={styles.summaryLabelLight}>Stock value</Text>
         <Text style={styles.summaryValueLight}>
@@ -532,7 +523,6 @@ function StockView({ products, refreshing, onRefresh, onStockPress, onFilterTap 
         </Text>
       </View>
 
-      {/* Low / Out — tappable, jump to Catalog with filter */}
       <View style={styles.summaryRow}>
         <TouchableOpacity
           style={[styles.summaryCard, styles.summaryCardWarn]}
@@ -577,7 +567,8 @@ function StockView({ products, refreshing, onRefresh, onStockPress, onFilterTap 
         </TouchableOpacity>
       </View>
 
-      {/* Sub-view toggle */}
+      <ActivitySection refreshKey={activityRefreshKey} />
+
       <View style={styles.subToggle}>
         <TouchableOpacity
           style={[styles.subToggleBtn, subView === 'attention' && styles.subToggleBtnActive]}
@@ -632,6 +623,51 @@ function StockView({ products, refreshing, onRefresh, onStockPress, onFilterTap 
   );
 }
 
+function ActivitySection({ refreshKey }) {
+  const [activity, setActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const data = await stockApi.recentActivity(10);
+        setActivity(data.activity || []);
+      } catch {
+        setActivity([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [refreshKey]);
+
+  if (loading) return null;
+  if (activity.length === 0) return null;
+
+  return (
+    <View style={styles.activitySection}>
+      <Text style={styles.activitySectionLabel}>Recent activity</Text>
+      {activity.slice(0, 5).map((a) => (
+        <View key={a.id} style={styles.activityRow}>
+          <View
+            style={[
+              styles.activityDot,
+              { backgroundColor: a.change > 0 ? colors.success : colors.textMuted },
+            ]}
+          />
+          <View style={styles.activityBody}>
+            <Text style={styles.activityName} numberOfLines={1}>
+              {a.productName}
+            </Text>
+            <Text style={styles.activityMeta} numberOfLines={1}>
+              {formatChange(a.change)} · {formatReason(a.reason)} · {timeAgo(a.createdAt)}
+            </Text>
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 function StockRow({ product, onRestock }) {
   const stock = Number(product.stock);
   const out = stock <= 0;
@@ -673,6 +709,31 @@ function StockRow({ product, onRestock }) {
       </TouchableOpacity>
     </View>
   );
+}
+
+function formatChange(n) {
+  return n > 0 ? `+${n}` : String(n);
+}
+
+function formatReason(r) {
+  return {
+    sale: 'Sold',
+    restock: 'Restocked',
+    correction: 'Corrected',
+    damage: 'Damaged',
+    return: 'Returned',
+    opening: 'Opening',
+  }[r] || r;
+}
+
+function timeAgo(iso) {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const s = Math.floor((now - then) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }
 
 const styles = StyleSheet.create({
@@ -871,15 +932,14 @@ const styles = StyleSheet.create({
   },
   emptyBtnTitle: { ...typography.bodyMedium, color: '#fff', fontWeight: '700' },
 
-  // ─── Stock view ───
+  // Stock view
   stockScroll: { flex: 1 },
   stockScrollContent: {
     paddingHorizontal: spacing.screenPadding,
     paddingBottom: spacing.xxxl,
   },
 
-  summaryGrid: { gap: spacing.sm, marginBottom: spacing.lg },
-  summaryRow: { flexDirection: 'row', gap: spacing.sm },
+  summaryRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   summaryCard: {
     flex: 1,
     padding: spacing.lg,
@@ -926,6 +986,43 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
     fontStyle: 'italic',
+  },
+
+  // Activity
+  activitySection: {
+    marginBottom: spacing.md,
+  },
+  activitySectionLabel: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
+    marginBottom: spacing.xs,
+  },
+  activityDot: {
+    width: 8, height: 8, borderRadius: 4,
+  },
+  activityBody: { flex: 1, minWidth: 0 },
+  activityName: {
+    ...typography.caption,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  activityMeta: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    marginTop: 1,
   },
 
   subToggle: {

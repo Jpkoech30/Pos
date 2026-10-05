@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
@@ -30,13 +30,14 @@ export default function ProductDetailScreen({ route, navigation }) {
   const { product: initial } = route.params;
   const [product, setProduct] = useState(initial);
   const [stockSheet, setStockSheet] = useState(false);
+  const [movements, setMovements] = useState([]);
+  const [movementsLoading, setMovementsLoading] = useState(true);
 
   const meta = CATEGORY_META[product.category] || CATEGORY_META.Default;
   const stock = Number(product.stock);
   const price = Number(product.price);
   const cost = product.costPrice != null ? Number(product.costPrice) : null;
 
-  // Stock status
   const stockStatus =
     stock <= 0
       ? { label: 'Out of stock', color: colors.danger, bg: colors.dangerSoft }
@@ -44,17 +45,31 @@ export default function ProductDetailScreen({ route, navigation }) {
       ? { label: `${stock} left — low`, color: colors.warning, bg: colors.warningSoft }
       : { label: `${stock} in stock`, color: colors.success, bg: colors.successSoft };
 
-  // Profit
   const profit = cost != null && price > 0
-    ? {
-        perUnit: price - cost,
-        marginPct: ((price - cost) / price) * 100,
-      }
+    ? { perUnit: price - cost, marginPct: ((price - cost) / price) * 100 }
     : null;
 
+  // Load movements on mount and whenever stock changes
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await productsApi.movements(product.id, 20);
+        if (!cancelled) setMovements(data.movements || []);
+      } catch {
+        if (!cancelled) setMovements([]);
+      } finally {
+        if (!cancelled) setMovementsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [product.id, product.stock]);
+
   const handleStockSave = async (p, nextStock) => {
-    const data = await productsApi.update(p.id, { stock: nextStock });
-    const updated = data?.product || { ...p, stock: nextStock };
+    const delta = nextStock - Number(p.stock);
+    if (delta === 0) return;
+    const reason = delta > 0 ? 'restock' : 'correction';
+    await productsApi.adjustStock(p.id, { change: delta, reason });
     setProduct((prev) => ({ ...prev, stock: nextStock }));
     Toast.show({
       type: 'success',
@@ -65,7 +80,6 @@ export default function ProductDetailScreen({ route, navigation }) {
 
   return (
     <Screen scroll edges={['bottom']}>
-      {/* ─── Hero ─── */}
       <Card variant="spacious" style={styles.hero}>
         <View style={[styles.iconCircle, { backgroundColor: meta.bg }]}>
           <Ionicons name={meta.icon} size={40} color={meta.color} />
@@ -81,7 +95,6 @@ export default function ProductDetailScreen({ route, navigation }) {
         </View>
       </Card>
 
-      {/* ─── Action buttons ─── */}
       <View style={styles.actions}>
         <TouchableOpacity
           style={[styles.actionBtn, styles.actionBtnPrimary]}
@@ -102,7 +115,6 @@ export default function ProductDetailScreen({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* ─── Stock & profit stats ─── */}
       <SectionLabel>At a glance</SectionLabel>
       <View style={styles.statGrid}>
         <View style={styles.statCard}>
@@ -143,9 +155,7 @@ export default function ProductDetailScreen({ route, navigation }) {
           <Text
             style={[
               styles.statValue,
-              profit && {
-                color: profit.perUnit < 0 ? colors.danger : colors.success,
-              },
+              profit && { color: profit.perUnit < 0 ? colors.danger : colors.success },
             ]}
           >
             {profit ? formatKsh(profit.perUnit) : '—'}
@@ -153,7 +163,6 @@ export default function ProductDetailScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* ─── Pricing detail ─── */}
       <SectionLabel>Pricing</SectionLabel>
       <Card variant="flat">
         <DetailRow label="Selling price" value={formatKsh(price)} />
@@ -175,32 +184,59 @@ export default function ProductDetailScreen({ route, navigation }) {
         )}
       </Card>
 
-      {/* ─── Codes & meta ─── */}
       <SectionLabel>Details</SectionLabel>
       <Card variant="flat">
         <DetailRow label="Category" value={product.category} />
         <Divider />
-        <DetailRow
-          label="SKU"
-          value={product.sku || 'Not set'}
-          muted={!product.sku}
-        />
+        <DetailRow label="SKU" value={product.sku || 'Not set'} muted={!product.sku} />
         <Divider />
-        <DetailRow
-          label="Barcode"
-          value={product.barcode || 'Not set'}
-          muted={!product.barcode}
-        />
+        <DetailRow label="Barcode" value={product.barcode || 'Not set'} muted={!product.barcode} />
       </Card>
 
-      {/* ─── Activity — placeholder for Phase 2 ─── */}
       <SectionLabel>Activity</SectionLabel>
-      <Card variant="flat" style={styles.activityPlaceholder}>
-        <Ionicons name="time-outline" size={20} color={colors.textMuted} />
-        <Text style={styles.activityText}>
-          Restock and sale history will appear here once stock tracking is on.
-        </Text>
-      </Card>
+      {movementsLoading ? null : movements.length === 0 ? (
+        <Card variant="flat" style={styles.activityPlaceholder}>
+          <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+          <Text style={styles.activityText}>
+            No movements yet. Sales and restocks will appear here.
+          </Text>
+        </Card>
+      ) : (
+        <Card variant="flat">
+          {movements.map((m, idx) => (
+            <View key={m.id}>
+              <View style={styles.movementRow}>
+                <View
+                  style={[
+                    styles.movementBadge,
+                    {
+                      backgroundColor:
+                        m.change > 0 ? colors.successSoft : colors.dangerSoft,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.movementBadgeText,
+                      { color: m.change > 0 ? colors.success : colors.danger },
+                    ]}
+                  >
+                    {m.change > 0 ? `+${m.change}` : m.change}
+                  </Text>
+                </View>
+                <View style={styles.movementBody}>
+                  <Text style={styles.movementReason}>{formatReason(m.reason)}</Text>
+                  <Text style={styles.movementMeta}>
+                    {timeAgo(m.createdAt)}
+                    {m.note ? ` · ${m.note}` : ''}
+                  </Text>
+                </View>
+              </View>
+              {idx < movements.length - 1 && <View style={styles.divider} />}
+            </View>
+          ))}
+        </Card>
+      )}
 
       <View style={{ height: spacing.xxxl }} />
 
@@ -235,144 +271,110 @@ function Divider() {
   return <View style={styles.divider} />;
 }
 
+function formatReason(r) {
+  return {
+    sale: 'Sold',
+    restock: 'Restocked',
+    correction: 'Corrected',
+    damage: 'Damaged',
+    return: 'Returned',
+    opening: 'Opening',
+  }[r] || r;
+}
+
+function timeAgo(iso) {
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const s = Math.floor((now - then) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
 const styles = StyleSheet.create({
-  hero: {
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
+  hero: { alignItems: 'center', marginBottom: spacing.lg },
   iconCircle: {
     width: 80, height: 80, borderRadius: 40,
     alignItems: 'center', justifyContent: 'center',
     marginBottom: spacing.lg,
   },
   category: {
-    ...typography.tiny,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: spacing.xs,
+    ...typography.tiny, color: colors.textMuted,
+    textTransform: 'uppercase', marginBottom: spacing.xs,
   },
   name: {
-    ...typography.h2,
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.sm,
+    ...typography.h2, color: colors.text,
+    textAlign: 'center', marginBottom: spacing.sm,
   },
-  price: {
-    ...typography.h1,
-    color: colors.primary,
-    marginBottom: spacing.md,
-  },
+  price: { ...typography.h1, color: colors.primary, marginBottom: spacing.md },
   stockPill: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.sm,
     borderRadius: radii.pill,
   },
-  stockPillText: {
-    ...typography.captionMedium,
-    fontWeight: '600',
-  },
+  stockPillText: { ...typography.captionMedium, fontWeight: '600' },
 
-  // Actions
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.lg,
-  },
+  actions: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
   actionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
-    borderRadius: radii.md,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: spacing.sm, paddingVertical: spacing.lg, borderRadius: radii.md,
   },
-  actionBtnPrimary: {
-    flex: 2,
-    backgroundColor: colors.primary,
-  },
+  actionBtnPrimary: { flex: 2, backgroundColor: colors.primary },
   actionBtnSecondary: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.primary,
+    flex: 1, backgroundColor: colors.surface,
+    borderWidth: 1, borderColor: colors.primary,
   },
-  actionBtnTextPrimary: {
-    ...typography.button,
-    color: '#fff',
-    fontSize: 15,
-  },
-  actionBtnTextSecondary: {
-    ...typography.button,
-    color: colors.primary,
-    fontSize: 15,
-  },
+  actionBtnTextPrimary: { ...typography.button, color: '#fff', fontSize: 15 },
+  actionBtnTextSecondary: { ...typography.button, color: colors.primary, fontSize: 15 },
 
-  // Stats grid
-  statGrid: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
+  statGrid: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
   statCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    gap: spacing.xs,
+    flex: 1, backgroundColor: colors.surface,
+    borderRadius: radii.lg, padding: spacing.md, gap: spacing.xs,
   },
-  statIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statLabel: {
-    ...typography.tiny,
-    color: colors.textMuted,
-  },
-  statValue: {
-    ...typography.h3,
-    color: colors.text,
-    fontWeight: '700',
-  },
+  statIconRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statLabel: { ...typography.tiny, color: colors.textMuted },
+  statValue: { ...typography.h3, color: colors.text, fontWeight: '700' },
 
-  // Detail rows
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
   },
-  detailLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
+  detailLabel: { ...typography.caption, color: colors.textSecondary },
   detailValue: {
-    ...typography.bodyMedium,
-    color: colors.text,
-    fontWeight: '600',
+    ...typography.bodyMedium, color: colors.text, fontWeight: '600',
   },
   detailValueMuted: {
-    color: colors.textMuted,
-    fontWeight: '500',
-    fontStyle: 'italic',
+    color: colors.textMuted, fontWeight: '500', fontStyle: 'italic',
   },
   divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginLeft: spacing.lg,
+    height: 1, backgroundColor: colors.border, marginLeft: spacing.lg,
   },
 
-  // Activity placeholder
   activityPlaceholder: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
   },
   activityText: {
-    ...typography.caption,
-    color: colors.textMuted,
-    flex: 1,
-    lineHeight: 18,
+    ...typography.caption, color: colors.textMuted,
+    flex: 1, lineHeight: 18,
+  },
+
+  movementRow: {
+    flexDirection: 'row', alignItems: 'center',
+    gap: spacing.md, paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  movementBadge: {
+    minWidth: 44, paddingHorizontal: spacing.sm, paddingVertical: 4,
+    borderRadius: radii.sm, alignItems: 'center',
+  },
+  movementBadgeText: { ...typography.caption, fontWeight: '800' },
+  movementBody: { flex: 1, minWidth: 0 },
+  movementReason: {
+    ...typography.bodyMedium, color: colors.text, fontWeight: '600',
+  },
+  movementMeta: {
+    ...typography.tiny, color: colors.textMuted, marginTop: 1,
   },
 });

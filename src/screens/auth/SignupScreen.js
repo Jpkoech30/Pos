@@ -1,141 +1,193 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, KeyboardAvoidingView, Platform,
-  TouchableWithoutFeedback, Keyboard, ScrollView,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+
 import { useAuth } from '../../context/AuthContext';
-import { useForm } from '../../hooks/useForm';
-import { signupSchema } from '../../utils/validators';
-import FormInput from '../../components/FormInput';
+import { colors, spacing, typography, radii } from '../../theme';
 
 export default function SignupScreen({ navigation }) {
   const { signUp } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState('');
+  const [shopName, setShopName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const { values, errors, setField, handleSubmit } = useForm(signupSchema, {
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
+  const canSubmit =
+    name.trim().length > 0 &&
+    shopName.trim().length > 0 &&
+    email.trim().length > 3 &&
+    password.length >= 6 &&
+    !submitting;
 
-  const onSubmit = handleSubmit(async ({ name, email, password }) => {
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setSubmitting(true);
     try {
-      setLoading(true);
-      await signUp(email.trim(), password, name.trim());
-      Toast.show({
-        type: 'success',
-        text1: `Welcome, ${name.trim()}!`,
-        text2: 'Account created successfully',
-      });
-      // RootNavigator auto-swaps to AppStack
+      await signUp(email.trim(), password, name.trim(), shopName.trim());
+      // RootNavigator will swap to AppStack automatically
     } catch (err) {
-      Toast.show({
-        type: 'error',
-        text1: 'Signup failed',
-        text2: err.message,
-      });
-    } finally {
-      setLoading(false);
+      Toast.show({ type: 'error', text1: 'Sign up failed', text2: err.message });
+      setSubmitting(false);
     }
-  });
+  };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+    <SafeAreaView style={styles.root} edges={['top', 'bottom']}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.flex}
+      >
         <ScrollView
-          contentContainerStyle={styles.container}
+          contentContainerStyle={styles.scroll}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Sign up to get started</Text>
+          <View style={styles.header}>
+            <Text style={styles.title}>Create your shop</Text>
+            <Text style={styles.subtitle}>
+              Set up Jengabiz for your business
+            </Text>
+          </View>
 
-          <FormInput
-            label="Full Name"
-            placeholder="Jane Doe"
-            value={values.name}
-            onChangeText={(t) => setField('name', t)}
-            error={errors.name}
-            autoCapitalize="words"
-            textContentType="name"
-            editable={!loading}
-          />
+          <Field label="Your name">
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Jane Wanjiku"
+              placeholderTextColor={colors.textMuted}
+              value={name}
+              onChangeText={setName}
+              autoCapitalize="words"
+            />
+          </Field>
 
-          <FormInput
-            label="Email"
-            placeholder="you@example.com"
-            value={values.email}
-            onChangeText={(t) => setField('email', t)}
-            error={errors.email}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            editable={!loading}
-          />
+          <Field label="Shop name">
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Mama Jane's Kiosk"
+              placeholderTextColor={colors.textMuted}
+              value={shopName}
+              onChangeText={setShopName}
+              autoCapitalize="words"
+            />
+          </Field>
 
-          <FormInput
-            label="Password"
-            placeholder="At least 6 characters"
-            value={values.password}
-            onChangeText={(t) => setField('password', t)}
-            error={errors.password}
-            secureTextEntry
-            textContentType="newPassword"
-            editable={!loading}
-          />
+          <Field label="Email">
+            <TextInput
+              style={styles.input}
+              placeholder="you@example.com"
+              placeholderTextColor={colors.textMuted}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+            />
+          </Field>
 
-          <FormInput
-            label="Confirm Password"
-            placeholder="Re-enter your password"
-            value={values.confirmPassword}
-            onChangeText={(t) => setField('confirmPassword', t)}
-            error={errors.confirmPassword}
-            secureTextEntry
-            textContentType="newPassword"
-            editable={!loading}
-          />
+          <Field label="Password (6+ characters)">
+            <TextInput
+              style={styles.input}
+              placeholder="••••••"
+              placeholderTextColor={colors.textMuted}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </Field>
 
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={onSubmit}
-            disabled={loading}
+            style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
+            onPress={handleSubmit}
+            disabled={!canSubmit}
+            activeOpacity={0.85}
           >
-            {loading ? (
+            {submitting ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Create Account</Text>
+              <Text style={styles.submitText}>Create shop</Text>
             )}
           </TouchableOpacity>
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.goBack()} disabled={loading}>
-              <Text style={styles.footerLink}>Log in</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.linkBtn}
+            onPress={() => navigation.goBack()}
+            disabled={submitting}
+          >
+            <Text style={styles.linkText}>
+              Already have an account? <Text style={styles.linkBold}>Sign in</Text>
+            </Text>
+          </TouchableOpacity>
         </ScrollView>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      {children}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, justifyContent: 'center', padding: 24, backgroundColor: '#fff' },
-  title: { fontSize: 30, fontWeight: '700', textAlign: 'center', color: '#111' },
-  subtitle: { fontSize: 15, color: '#6b7280', textAlign: 'center', marginTop: 6, marginBottom: 28 },
-  button: {
-    backgroundColor: '#2563eb', padding: 16,
-    borderRadius: 8, alignItems: 'center', marginTop: 12,
+  root: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
+  scroll: {
+    padding: spacing.screenPadding,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.xxxl,
   },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 24 },
-  footerText: { color: '#6b7280', fontSize: 14 },
-  footerLink: { color: '#2563eb', fontSize: 14, fontWeight: '600' },
+
+  header: { marginBottom: spacing.xl },
+  title: { ...typography.h2, color: colors.text },
+  subtitle: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+
+  field: { marginBottom: spacing.md },
+  fieldLabel: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  input: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  submitBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    borderRadius: radii.md,
+    alignItems: 'center',
+    marginTop: spacing.lg,
+  },
+  submitBtnDisabled: { opacity: 0.4 },
+  submitText: { ...typography.button, color: '#fff', fontSize: 17 },
+
+  linkBtn: {
+    alignItems: 'center',
+    marginTop: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  linkText: { ...typography.caption, color: colors.textMuted },
+  linkBold: { color: colors.primary, fontWeight: '700' },
 });

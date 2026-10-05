@@ -7,7 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 // --- Sale ---
 import SaleScreen from '../screens/sale/SaleScreen';
 import CheckoutScreen from '../screens/sale/CheckoutScreen';
-import ScannerScreen from '../screens/sale/ScannerScreen';
+import SaleScannerScreen from '../screens/sale/SaleScannerScreen';
 import MpesaPaymentScreen from '../screens/sale/MpesaPaymentScreen';
 import CashPaymentScreen from '../screens/sale/CashPaymentScreen';
 import StkPushScreen from '../screens/sale/StkPushScreen';
@@ -17,6 +17,7 @@ import ReceiptScreen from '../screens/sale/ReceiptScreen';
 import ProductsScreen from '../screens/products/ProductsScreen';
 import ProductDetailScreen from '../screens/products/ProductDetailScreen';
 import ProductFormScreen from '../screens/products/ProductFormScreen';
+import ProductScannerScreen from '../screens/products/ProductScannerScreen';
 
 // --- Orders ---
 import OrdersScreen from '../screens/orders/OrdersScreen';
@@ -27,6 +28,9 @@ import DailyAnalyticsScreen from '../screens/orders/DailyAnalyticsScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import ChangePasswordScreen from '../screens/profile/ChangePasswordScreen';
+import ShopSettingsScreen from '../screens/profile/ShopSettingsScreen';
+import PaymentSettingsScreen from '../screens/profile/PaymentSettingsScreen';
+import TeamScreen from '../screens/profile/TeamScreen';
 
 import { colors } from '../theme';
 
@@ -41,7 +45,8 @@ function SaleStackNavigator() {
     <SaleStack.Navigator>
       <SaleStack.Screen name="SaleHome" component={SaleScreen} options={{ headerShown: false }} />
       <SaleStack.Screen name="Checkout" component={CheckoutScreen} options={{ title: 'Checkout' }} />
-      <SaleStack.Screen name="Scanner" component={ScannerScreen} options={{ headerShown: false }} />
+      <SaleStack.Screen name="Scanner" component={SaleScannerScreen} options={{ headerShown: false }} />
+      <SaleStack.Screen name="ProductForm" component={ProductFormScreen} options={{ title: 'New Product' }} />
       <SaleStack.Screen name="MpesaPayment" component={MpesaPaymentScreen} options={{ headerShown: false }} />
       <SaleStack.Screen name="CashPayment" component={CashPaymentScreen} options={{ headerShown: false }} />
       <SaleStack.Screen name="StkPush" component={StkPushScreen} options={{ headerShown: false }} />
@@ -56,6 +61,7 @@ function ProductsStackNavigator() {
       <ProductsStack.Screen name="ProductsHome" component={ProductsScreen} options={{ headerShown: false }} />
       <ProductsStack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ title: 'Product' }} />
       <ProductsStack.Screen name="ProductForm" component={ProductFormScreen} options={{ title: 'Product' }} />
+      <ProductsStack.Screen name="Scanner" component={ProductScannerScreen} options={{ headerShown: false }} />
     </ProductsStack.Navigator>
   );
 }
@@ -76,6 +82,9 @@ function ProfileStackNavigator() {
       <ProfileStack.Screen name="ProfileHome" component={ProfileScreen} options={{ headerShown: false }} />
       <ProfileStack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: 'Edit Profile' }} />
       <ProfileStack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Change Password' }} />
+      <ProfileStack.Screen name="ShopSettings" component={ShopSettingsScreen} options={{ title: 'Shop settings' }} />
+      <ProfileStack.Screen name="PaymentSettings" component={PaymentSettingsScreen} options={{ title: 'STK Push' }} />
+      <ProfileStack.Screen name="Team" component={TeamScreen} options={{ title: 'Team' }} />
     </ProfileStack.Navigator>
   );
 }

@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatKsh } from '../../utils/format';
 import { colors, spacing, typography, radii, shadows } from '../../theme';
 
@@ -13,6 +14,9 @@ export default function CheckoutScreen({ navigation }) {
     items, subtotal, tax, total,
     updateQty, removeItem, clearCart,
   } = useCart();
+  const { shop } = useAuth();
+
+  const stkEnabled = shop?.stkEnabled === true;
 
   const handleClear = () => {
     clearCart();
@@ -22,11 +26,8 @@ export default function CheckoutScreen({ navigation }) {
 
   const handleQtyChange = (productId, currentQty, delta) => {
     const next = currentQty + delta;
-    if (next <= 0) {
-      removeItem(productId);
-    } else {
-      updateQty(productId, next);
-    }
+    if (next <= 0) removeItem(productId);
+    else updateQty(productId, next);
   };
 
   if (items.length === 0) {
@@ -62,9 +63,7 @@ export default function CheckoutScreen({ navigation }) {
               <View style={styles.itemRow}>
                 <View style={styles.itemLeft}>
                   <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                  <Text style={styles.itemUnit}>
-                    {formatKsh(item.price)} each
-                  </Text>
+                  <Text style={styles.itemUnit}>{formatKsh(item.price)} each</Text>
                 </View>
 
                 <View style={styles.qtyControls}>
@@ -125,7 +124,7 @@ export default function CheckoutScreen({ navigation }) {
             onPress={() => navigation.navigate('MpesaPayment')}
             activeOpacity={0.8}
           >
-            <Ionicons name="phone-portrait-outline" size={28} color={colors.primary} />
+            <Ionicons name="phone-portrait-outline" size={26} color={colors.primary} />
             <Text style={styles.payLabel}>M-Pesa</Text>
           </TouchableOpacity>
 
@@ -134,19 +133,36 @@ export default function CheckoutScreen({ navigation }) {
             onPress={() => navigation.navigate('CashPayment')}
             activeOpacity={0.8}
           >
-            <Ionicons name="cash-outline" size={28} color={colors.primary} />
+            <Ionicons name="cash-outline" size={26} color={colors.primary} />
             <Text style={styles.payLabel}>Cash</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.payTile}
-            onPress={() => navigation.navigate('StkPush')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="flash-outline" size={28} color={colors.primary} />
-            <Text style={styles.payLabel}>STK Push</Text>
-          </TouchableOpacity>
+          {stkEnabled && (
+            <TouchableOpacity
+              style={styles.payTile}
+              onPress={() => navigation.navigate('StkPush')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="flash-outline" size={26} color={colors.primary} />
+              <Text style={styles.payLabel}>STK Push</Text>
+            </TouchableOpacity>
+          )}
         </View>
+
+        {!stkEnabled && (
+          <View style={styles.setupNotice}>
+            <View style={styles.setupIcon}>
+              <Ionicons name="flash-off-outline" size={18} color={colors.textMuted} />
+            </View>
+            <View style={styles.setupBody}>
+              <Text style={styles.setupTitle}>STK Push not set up</Text>
+              <Text style={styles.setupSub}>
+                Enable automatic M-Pesa prompts by adding Daraja credentials
+                in Profile → STK Push.
+              </Text>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -168,7 +184,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xxl, paddingVertical: spacing.md,
     backgroundColor: colors.primary, borderRadius: radii.md,
   },
-  emptyBtnText: { ...typography.button, color: colors.textInverse },
+  emptyBtnText: { ...typography.button, color: '#fff' },
 
   sectionHeader: {
     flexDirection: 'row',
@@ -182,12 +198,14 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1,
+    fontWeight: '700',
   },
   sectionLabelStandalone: {
     ...typography.caption,
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1,
+    fontWeight: '700',
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
@@ -211,7 +229,11 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   itemLeft: { flex: 1, minWidth: 0 },
-  itemName: { ...typography.bodyMedium, color: colors.text, fontWeight: '600' },
+  itemName: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    fontWeight: '600',
+  },
   itemUnit: { ...typography.tiny, color: colors.textMuted, marginTop: 2 },
 
   qtyControls: {
@@ -281,5 +303,31 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: spacing.xs,
     textAlign: 'center',
+  },
+
+  setupNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: 'dashed',
+  },
+  setupIcon: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: colors.background,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  setupBody: { flex: 1 },
+  setupTitle: {
+    ...typography.caption, color: colors.text, fontWeight: '700',
+  },
+  setupSub: {
+    ...typography.tiny, color: colors.textMuted,
+    marginTop: 2, lineHeight: 15,
   },
 });

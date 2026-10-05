@@ -8,14 +8,18 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
 import { mpesaApi } from '../../services/mpesa';
 import { colors, spacing, typography, radii } from '../../theme';
 
 const POLL_INTERVAL = 2000;
+const QUERY_AFTER_MS = 30000;
 const TIMEOUT_MS = 90000;
 
 export default function StkPushScreen({ navigation }) {
   const { items, total, clearCart } = useCart();
+  const { shop } = useAuth();
+
   const [phone, setPhone] = useState('');
   const [phase, setPhase] = useState('input');
   const [orderId, setOrderId] = useState(null);
@@ -24,6 +28,9 @@ export default function StkPushScreen({ navigation }) {
   const pollRef = useRef(null);
   const timeoutRef = useRef(null);
 
+  const stkEnabled = shop?.stkEnabled === true;
+
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -31,13 +38,84 @@ export default function StkPushScreen({ navigation }) {
     };
   }, []);
 
-  const validPhone = /^(254|0|\+254)?[17]\d{8}$/.test(phone.replace(/\s/g, ''));
+  // Re-poll on app resume — handles the case where the app was
+  // backgrounded while waiting for the PIN.
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', async () => {
+      if (phase === 'waiting' && orderId) {
+        try {
+          const s = await mpesaApi.status(orderId);
+          if (s.status !== 'pending') {
+            stopPolling();
+            setResult(s.order);
+            setPhase('done');
+            if (s.status === 'completed') clearCart();
+          }
+        } catch {
+          // Ignore — normal polling will keep trying.
+        }
+      }
+    });
+    return unsub;
+  }, [navigation, phase, orderId, clearCart]);
+
+  const stopPolling = () => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    pollRef.current = null;
+    timeoutRef.current = null;
+  };
+
+  const startPolling = (id) => {
+    const startedAt = Date.now();
+    let queried = false;
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const elapsed = Date.now() - startedAt;
+
+        // Ask Safaricom exactly once, after 30 seconds of pending.
+        // This catches the case where the callback never arrived.
+        if (elapsed > QUERY_AFTER_MS && !queried) {
+          queried = true;
+          try {
+            const q = await mpesaApi.query(id);
+            if (q.status === 'completed' || q.status === 'failed') {
+              stopPolling();
+              setResult(q.order);
+              setPhase('done');
+              if (q.status === 'completed') clearCart();
+              return;
+            }
+          } catch {
+            // Query failed — fall through to normal status check.
+          }
+        }
+
+        const s = await mpesaApi.status(id);
+        if (s.status === 'completed' || s.status === 'failed') {
+          stopPolling();
+          setResult(s.order);
+          setPhase('done');
+          if (s.status === 'completed') clearCart();
+        }
+      } catch {
+        // Transient — keep polling.
+      }
+    }, POLL_INTERVAL);
+
+    timeoutRef.current = setTimeout(() => {
+      stopPolling();
+      setPhase('input');
+      Toast.show({
+        type: 'error',
+        text1: 'Timed out',
+        text2: 'No response from M-Pesa',
+      });
+    }, TIMEOUT_MS);
+  };
 
   const handleSend = async () => {
-    if (!validPhone) {
-      Toast.show({ type: 'error', text1: 'Enter a valid Kenyan number' });
-      return;
-    }
     try {
       setPhase('waiting');
       const data = await mpesaApi.initiateStk({
@@ -50,31 +128,64 @@ export default function StkPushScreen({ navigation }) {
         })),
       });
       setOrderId(data.orderId);
-
-      pollRef.current = setInterval(async () => {
-        try {
-          const s = await mpesaApi.status(data.orderId);
-          if (s.status === 'completed' || s.status === 'failed') {
-            clearInterval(pollRef.current);
-            clearTimeout(timeoutRef.current);
-            setResult(s.order);
-            setPhase('done');
-            if (s.status === 'completed') clearCart();
-          }
-        } catch (e) {}
-      }, POLL_INTERVAL);
-
-      timeoutRef.current = setTimeout(() => {
-        if (pollRef.current) clearInterval(pollRef.current);
-        setPhase('input');
-        Toast.show({ type: 'error', text1: 'Timed out', text2: 'No response from M-Pesa' });
-      }, TIMEOUT_MS);
+      startPolling(data.orderId);
     } catch (err) {
       setPhase('input');
-      Toast.show({ type: 'error', text1: 'STK Push failed', text2: err.message });
+      Toast.show({
+        type: 'error',
+        text1: 'STK Push failed',
+        text2: err.message,
+      });
     }
   };
 
+  const handleCancelWaiting = async () => {
+    stopPolling();
+    if (orderId) {
+      try {
+        await mpesaApi.cancel(orderId);
+      } catch {
+        // Best-effort — the sweeper will catch it.
+      }
+    }
+    setPhase('input');
+    setOrderId(null);
+  };
+
+  const handleTryAgain = () => {
+    setPhase('input');
+    setResult(null);
+    setOrderId(null);
+  };
+
+  // ─── Not configured ───
+  if (!stkEnabled && phase === 'input') {
+    return (
+      <SafeAreaView style={styles.root} edges={['bottom']}>
+        <View style={styles.center}>
+          <View style={styles.notConfiguredIcon}>
+            <Ionicons name="flash-off-outline" size={40} color={colors.textMuted} />
+          </View>
+          <Text style={styles.notConfiguredTitle}>STK Push not set up</Text>
+          <Text style={styles.notConfiguredSub}>
+            Add Daraja credentials in Profile → STK Push to enable automatic
+            M-Pesa payment prompts.
+          </Text>
+        </View>
+        <View style={styles.bottomBar}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.primaryBtnText}>Back to Checkout</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ─── Waiting ───
   if (phase === 'waiting') {
     return (
       <SafeAreaView style={styles.root} edges={['bottom']}>
@@ -88,33 +199,38 @@ export default function StkPushScreen({ navigation }) {
         </View>
         <View style={styles.bottomBar}>
           <TouchableOpacity
-            style={styles.cancel}
-            onPress={() => {
-              if (pollRef.current) clearInterval(pollRef.current);
-              if (timeoutRef.current) clearTimeout(timeoutRef.current);
-              setPhase('input');
-            }}
+            style={styles.cancelPrimary}
+            onPress={handleCancelWaiting}
+            activeOpacity={0.85}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Ionicons name="close-circle-outline" size={18} color={colors.danger} />
+            <Text style={styles.cancelPrimaryText}>Cancel & use another method</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
+  // ─── Done ───
   if (phase === 'done') {
     const success = result?.paymentStatus === 'completed';
     return (
       <SafeAreaView style={styles.root} edges={['bottom']}>
         <View style={styles.center}>
           <View style={[styles.resultCircle, success ? styles.okCircle : styles.failCircle]}>
-            <Ionicons name={success ? 'checkmark' : 'close'} size={48} color="#fff" />
+            <Ionicons
+              name={success ? 'checkmark' : 'close'}
+              size={48}
+              color="#fff"
+            />
           </View>
           <Text style={styles.resultTitle}>
             {success ? 'Payment Received' : 'Payment Failed'}
           </Text>
           {result?.mpesaReceiptNumber && (
-            <Text style={styles.receipt}>Receipt: {result.mpesaReceiptNumber}</Text>
+            <Text style={styles.receipt}>
+              Receipt: {result.mpesaReceiptNumber}
+            </Text>
           )}
           {result?.mpesaResultDesc && !success && (
             <Text style={styles.reason}>{result.mpesaResultDesc}</Text>
@@ -123,20 +239,25 @@ export default function StkPushScreen({ navigation }) {
         <View style={styles.bottomBar}>
           {success ? (
             <TouchableOpacity
-              style={styles.confirm}
+              style={styles.primaryBtn}
               onPress={() => navigation.replace('Receipt', { order: result })}
+              activeOpacity={0.85}
             >
-              <Text style={styles.confirmText}>View Receipt</Text>
+              <Text style={styles.primaryBtnText}>View Receipt</Text>
             </TouchableOpacity>
           ) : (
             <>
               <TouchableOpacity
-                style={styles.confirm}
-                onPress={() => { setPhase('input'); setResult(null); }}
+                style={styles.primaryBtn}
+                onPress={handleTryAgain}
+                activeOpacity={0.85}
               >
-                <Text style={styles.confirmText}>Try Again</Text>
+                <Text style={styles.primaryBtnText}>Try Again</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.cancel} onPress={() => navigation.goBack()}>
+              <TouchableOpacity
+                style={styles.cancel}
+                onPress={() => navigation.goBack()}
+              >
                 <Text style={styles.cancelText}>Back to Checkout</Text>
               </TouchableOpacity>
             </>
@@ -145,6 +266,9 @@ export default function StkPushScreen({ navigation }) {
       </SafeAreaView>
     );
   }
+
+  // ─── Input ───
+  const validPhone = /^(254|0|\+254)?[17]\d{8}$/.test(phone.replace(/\s/g, ''));
 
   return (
     <SafeAreaView style={styles.root} edges={['bottom']}>
@@ -173,14 +297,18 @@ export default function StkPushScreen({ navigation }) {
 
         <View style={styles.bottomBar}>
           <TouchableOpacity
-            style={[styles.confirm, !validPhone && styles.disabled]}
+            style={[styles.primaryBtn, !validPhone && styles.disabled]}
             onPress={handleSend}
             disabled={!validPhone}
+            activeOpacity={0.85}
           >
             <Ionicons name="phone-portrait-outline" size={20} color="#fff" />
-            <Text style={styles.confirmText}>Send STK Push</Text>
+            <Text style={styles.primaryBtnText}>Send STK Push</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.cancel} onPress={() => navigation.goBack()}>
+          <TouchableOpacity
+            style={styles.cancel}
+            onPress={() => navigation.goBack()}
+          >
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
         </View>
@@ -192,7 +320,11 @@ export default function StkPushScreen({ navigation }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xxl },
+  center: {
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    padding: spacing.xxl,
+  },
+
   content: { flex: 1, padding: spacing.screenPadding },
   label: {
     ...typography.caption, color: colors.textMuted,
@@ -209,10 +341,12 @@ const styles = StyleSheet.create({
   hint: { ...typography.caption, color: colors.textMuted, marginTop: spacing.sm },
   summary: {
     marginTop: spacing.xxl, padding: spacing.lg,
-    backgroundColor: colors.surface, borderRadius: radii.md, alignItems: 'center',
+    backgroundColor: colors.surface, borderRadius: radii.md,
+    alignItems: 'center',
   },
   summaryLabel: { ...typography.caption, color: colors.textMuted },
   summaryAmount: { ...typography.h1, color: colors.text, marginTop: spacing.xs },
+
   waitTitle: { ...typography.h2, color: colors.text, marginTop: spacing.xl },
   waitSub: {
     ...typography.body, color: colors.textSecondary,
@@ -222,11 +356,12 @@ const styles = StyleSheet.create({
     ...typography.caption, color: colors.textMuted,
     marginTop: spacing.lg, textAlign: 'center', maxWidth: 260,
   },
+
   resultCircle: {
     width: 96, height: 96, borderRadius: 48,
     alignItems: 'center', justifyContent: 'center',
   },
-  okCircle: { backgroundColor: '#16a34a' },
+  okCircle: { backgroundColor: colors.success },
   failCircle: { backgroundColor: colors.danger },
   resultTitle: { ...typography.h2, color: colors.text, marginTop: spacing.lg },
   receipt: { ...typography.bodyMedium, color: colors.text, marginTop: spacing.md },
@@ -234,14 +369,37 @@ const styles = StyleSheet.create({
     ...typography.body, color: colors.textMuted,
     marginTop: spacing.sm, textAlign: 'center',
   },
+
+  notConfiguredIcon: {
+    width: 84, height: 84, borderRadius: 42,
+    backgroundColor: colors.background,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
+  notConfiguredTitle: { ...typography.h3, color: colors.text },
+  notConfiguredSub: {
+    ...typography.body, color: colors.textSecondary,
+    textAlign: 'center', marginTop: spacing.sm,
+    maxWidth: 300, lineHeight: 22,
+  },
+
   bottomBar: { padding: spacing.screenPadding, gap: spacing.sm },
-  confirm: {
+  primaryBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     backgroundColor: colors.primary,
     paddingVertical: spacing.lg, borderRadius: radii.md, gap: spacing.sm,
   },
+  primaryBtnText: { ...typography.button, color: '#fff', fontSize: 17 },
   disabled: { opacity: 0.4 },
-  confirmText: { ...typography.button, color: '#fff', fontSize: 17 },
+
+  cancelPrimary: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    paddingVertical: spacing.lg, borderRadius: radii.md, gap: spacing.sm,
+    borderWidth: 1, borderColor: colors.danger,
+  },
+  cancelPrimaryText: {
+    ...typography.button, color: colors.danger, fontSize: 15,
+  },
   cancel: { paddingVertical: spacing.md, alignItems: 'center' },
   cancelText: { ...typography.body, color: colors.textMuted },
 });

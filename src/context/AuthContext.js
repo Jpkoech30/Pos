@@ -1,6 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import * as LocalAuthentication from 'expo-local-authentication';
 import { authApi } from '../services/auth';
 import { setUnauthorizedHandler } from '../services/api';
 
@@ -8,113 +7,141 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [shop, setShop] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
 
-  // Restore session on cold start
+  // Cold start — restore cached session immediately, then refresh in background
   useEffect(() => {
     (async () => {
       try {
-        const token = await SecureStore.getItemAsync('token');
-        const email = await SecureStore.getItemAsync('email');
-        const bioFlag = await SecureStore.getItemAsync('biometric_enabled');
-        if (token) setUser({ token, email });
-        if (bioFlag === 'true') setBiometricEnabled(true);
+        const cached = await SecureStore.getItemAsync('session');
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed?.token) {
+            setUser(parsed.user || { token: parsed.token, email: parsed.email });
+            setShop(parsed.shop || null);
+            setIsLoading(false);
+
+            // Background refresh — updates silently, or signs out on 401
+            try {
+              const fresh = await authApi.me();
+              const nextUser = {
+                token: parsed.token,
+                email: fresh.user.email,
+                name: fresh.user.name,
+                role: fresh.user.role,
+                shopId: fresh.user.shopId,
+              };
+              setUser(nextUser);
+              setShop(fresh.shop || null);
+              await SecureStore.setItemAsync(
+                'session',
+                JSON.stringify({ token: parsed.token, user: nextUser, shop: fresh.shop }),
+              );
+            } catch (err) {
+              // 401 → interceptor already signed out. Other errors → keep cache.
+            }
+            return;
+          }
+        }
       } catch (e) {
-        console.warn('Session restore failed', e);
-      } finally {
-        setIsLoading(false);
+        console.warn('Session restore failed', e.message);
       }
+      setIsLoading(false);
     })();
   }, []);
 
-  // Auto-logout on 401 from the API layer
+  // Auto sign-out on 401
   useEffect(() => {
     setUnauthorizedHandler(async () => {
       await signOut();
     });
   }, []);
 
-  const signIn = async (email, password) => {
-    const data = await authApi.login(email, password);
-    await SecureStore.setItemAsync('token', data.token);
-    await SecureStore.setItemAsync('email', data.user.email);
-    setUser({ token: data.token, email: data.user.email, name: data.user.name });
+  const persistSession = async (token, userObj, shopObj) => {
+    await SecureStore.setItemAsync(
+      'session',
+      JSON.stringify({ token, user: userObj, shop: shopObj }),
+    );
+    // Legacy keys, kept for compatibility with anything still reading them
+    await SecureStore.setItemAsync('token', token);
+    await SecureStore.setItemAsync('email', userObj.email);
   };
 
-  const signUp = async (email, password, name) => {
-    const data = await authApi.signup(email, password, name);
-    await SecureStore.setItemAsync('token', data.token);
-    await SecureStore.setItemAsync('email', data.user.email);
-    setUser({ token: data.token, email: data.user.email, name: data.user.name });
+  const signIn = async (email, password) => {
+    const data = await authApi.login(email, password);
+    const u = {
+      token: data.token,
+      email: data.user.email,
+      name: data.user.name,
+      role: data.user.role,
+      shopId: data.user.shopId,
+    };
+    setUser(u);
+    setShop(data.shop || null);
+    await persistSession(data.token, u, data.shop);
+  };
+
+  const signUp = async (email, password, name, shopName) => {
+    const data = await authApi.signup(email, password, name, shopName);
+    const u = {
+      token: data.token,
+      email: data.user.email,
+      name: data.user.name,
+      role: data.user.role,
+      shopId: data.user.shopId,
+    };
+    setUser(u);
+    setShop(data.shop || null);
+    await persistSession(data.token, u, data.shop);
   };
 
   const signOut = async () => {
-    // If biometrics are enabled, keep the token on the device so the user
-    // can log back in with their fingerprint. Only clear the in-memory session.
-    if (biometricEnabled) {
-      setUser(null);
-      return;
-    }
-
-    // Full logout: wipe everything
+    await SecureStore.deleteItemAsync('session');
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('email');
-    await SecureStore.deleteItemAsync('biometric_enabled');
     setUser(null);
-    setBiometricEnabled(false);
+    setShop(null);
   };
 
-  const enableBiometrics = async () => {
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
-    if (!hasHardware) throw new Error('No biometric hardware on this device');
-
-    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-    if (!isEnrolled) throw new Error('No fingerprint or Face ID enrolled');
-
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Enable biometric login',
-      cancelLabel: 'Cancel',
-    });
-
-    if (result.success) {
-      await SecureStore.setItemAsync('biometric_enabled', 'true');
-      setBiometricEnabled(true);
-      return true;
+  const refreshShop = async () => {
+    try {
+      const fresh = await authApi.me();
+      setShop(fresh.shop || null);
+      setUser((prev) => {
+        const next = prev
+          ? { ...prev, name: fresh.user.name, role: fresh.user.role }
+          : prev;
+        if (next) {
+          SecureStore.setItemAsync(
+            'session',
+            JSON.stringify({ token: next.token, user: next, shop: fresh.shop }),
+          ).catch(() => {});
+        }
+        return next;
+      });
+      return fresh.shop;
+    } catch (err) {
+      console.warn('refreshShop failed', err.message);
+      return null;
     }
-    return false;
   };
 
-  const signInWithBiometrics = async () => {
-    if (!biometricEnabled) throw new Error('Biometric login is not enabled');
-
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Log in to your banking app',
-      cancelLabel: 'Cancel',
-    });
-
-    if (result.success) {
-      const token = await SecureStore.getItemAsync('token');
-      const email = await SecureStore.getItemAsync('email');
-      if (token && email) {
-        setUser({ token, email });
-        return true;
-      }
-    }
-    return false;
-  };
+  const isOwner = user?.role === 'owner';
+  const isManager = user?.role === 'manager' || isOwner;
 
   return (
     <AuthContext.Provider
       value={{
         user,
+        shop,
         isLoading,
-        biometricEnabled,
+        isOwner,
+        isManager,
         signIn,
         signUp,
         signOut,
-        enableBiometrics,
-        signInWithBiometrics,
+        refreshShop,
       }}
     >
       {children}

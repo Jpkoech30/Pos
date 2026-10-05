@@ -51,8 +51,7 @@ export default function DailyAnalyticsScreen({ route, navigation }) {
     const avg = count > 0 ? total / count : 0;
     const failedLoss = failed.reduce((s, o) => s + o.total, 0);
 
-    // ─── Profit ───────────────────────────────────────────
-    // Orders with profit info have non-null grossProfit and totalCost.
+    // Profit — only orders where every item had a cost snapshot
     const withProfit = successful.filter((o) => o.grossProfit != null);
     const withoutProfit = successful.length - withProfit.length;
     const hasAnyProfit = withProfit.length > 0;
@@ -71,7 +70,7 @@ export default function DailyAnalyticsScreen({ route, navigation }) {
         ? (grossProfit / revenueWithCost) * 100
         : null;
 
-    // ─── Items ────────────────────────────────────────────
+    // Items
     let itemsSold = 0;
     const itemMap = new Map();
     successful.forEach((o) => {
@@ -108,7 +107,7 @@ export default function DailyAnalyticsScreen({ route, navigation }) {
       .sort((a, b) => b.profit - a.profit)
       .slice(0, 5);
 
-    // ─── Hourly ───────────────────────────────────────────
+    // Hourly
     const buckets = Array(24).fill(0);
     successful.forEach((o) => {
       const h = new Date(o.createdAt).getHours();
@@ -200,7 +199,8 @@ export default function DailyAnalyticsScreen({ route, navigation }) {
             <Ionicons name="warning-outline" size={18} color={colors.danger} />
             <View style={styles.alertText}>
               <Text style={styles.alertTitle}>
-                {stats.failedCount} failed {stats.failedCount === 1 ? 'payment' : 'payments'}
+                {stats.failedCount} failed{' '}
+                {stats.failedCount === 1 ? 'payment' : 'payments'}
               </Text>
               <Text style={styles.alertSub}>
                 {formatKsh(stats.failedLoss)} not collected
@@ -209,7 +209,7 @@ export default function DailyAnalyticsScreen({ route, navigation }) {
           </View>
         )}
 
-        {/* Profit card — appears only if we have cost data */}
+        {/* Profit card */}
         {stats.hasAnyProfit ? (
           <View style={styles.profitCard}>
             <View style={styles.profitHeader}>
@@ -248,8 +248,10 @@ export default function DailyAnalyticsScreen({ route, navigation }) {
                 <Ionicons name="alert-circle-outline" size={14} color={colors.warning} />
                 <Text style={styles.profitWarningText}>
                   {stats.withoutProfit}{' '}
-                  {stats.withoutProfit === 1 ? 'order has' : 'orders have'} no
-                  cost data and are excluded
+                  {stats.withoutProfit === 1
+                    ? 'order has'
+                    : 'orders have'}{' '}
+                  no cost data and are excluded
                 </Text>
               </View>
             )}
@@ -346,7 +348,7 @@ export default function DailyAnalyticsScreen({ route, navigation }) {
           )}
         </View>
 
-        {/* Most profitable — only if we have cost data */}
+        {/* Most profitable */}
         {stats.topByProfit.length > 0 && (
           <>
             <Text style={styles.sectionLabel}>Most profitable</Text>
@@ -383,7 +385,7 @@ export default function DailyAnalyticsScreen({ route, navigation }) {
           </>
         )}
 
-        {/* Top by revenue */}
+        {/* Top sellers */}
         <Text style={styles.sectionLabel}>Top sellers</Text>
         <View style={styles.card}>
           {stats.topByRevenue.length === 0 ? (
@@ -499,7 +501,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // Profit card
   profitCard: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
@@ -599,7 +600,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  // Split
   splitCard: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
@@ -698,7 +698,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  // Items list (shared between top profitable and top sellers)
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',

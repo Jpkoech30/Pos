@@ -1,232 +1,323 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import {
-  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
-} from 'react-native';
+import React from 'react';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
+
 import { useAuth } from '../../context/AuthContext';
-import { usersApi } from '../../services/users';
-import { Screen, Card, Divider, SectionLabel } from '../../components/ui';
-import { colors, spacing, typography, radii } from '../../theme';
+import { colors, spacing, typography, radii, shadows } from '../../theme';
+
+const ROLE_LABELS = {
+  owner: 'Owner',
+  manager: 'Manager',
+  cashier: 'Cashier',
+};
 
 export default function ProfileScreen({ navigation }) {
-  const { user, signOut } = useAuth();
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user, shop, isOwner, isManager, signOut } = useAuth();
 
-  const loadProfile = useCallback(async () => {
+  const handleSignOut = async () => {
     try {
-      const data = await usersApi.getProfile();
-      setProfile(data.user);
+      await signOut();
     } catch (err) {
-      Toast.show({ type: 'error', text1: 'Could not load profile', text2: err.message });
-    } finally {
-      setLoading(false);
+      Toast.show({ type: 'error', text1: 'Sign out failed', text2: err.message });
     }
-  }, []);
-
-  useEffect(() => { loadProfile(); }, [loadProfile]);
-
-  useEffect(() => {
-    const unsub = navigation.addListener('focus', loadProfile);
-    return unsub;
-  }, [navigation, loadProfile]);
-
-  const handleLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log Out', style: 'destructive', onPress: () => signOut() },
-    ]);
   };
 
-  const initials = (profile?.name || user?.email || '?')
+  const initials = (user?.name || user?.email || '?')
     .split(' ')
-    .filter(Boolean)
     .map((s) => s[0])
+    .filter(Boolean)
     .slice(0, 2)
     .join('')
     .toUpperCase();
 
-  const memberSince = profile?.createdAt
-    ? new Date(profile.createdAt).toLocaleDateString('en-US', {
-        month: 'long',
-        year: 'numeric',
-      })
-    : '';
-
-  if (loading && !profile) {
-    return (
-      <Screen>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      </Screen>
-    );
-  }
-
   return (
-    <Screen scroll>
-      {/* HERO */}
-      <Card variant="spacious" style={styles.hero}>
-        <View style={styles.avatarRing}>
+    <SafeAreaView style={styles.root} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* User card */}
+        <View style={styles.userCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initials}</Text>
           </View>
-        </View>
-        <Text style={styles.name}>{profile?.name || 'Unnamed User'}</Text>
-        <Text style={styles.email}>{profile?.email}</Text>
-
-        {memberSince ? (
-          <View style={styles.pill}>
-            <Ionicons name="calendar-outline" size={12} color={colors.textMuted} />
-            <Text style={styles.pillText}>Member since {memberSince}</Text>
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{user?.name || 'Unnamed'}</Text>
+            <Text style={styles.userEmail}>{user?.email}</Text>
+            <View style={styles.rolePill}>
+              <Text style={styles.rolePillText}>
+                {ROLE_LABELS[user?.role] || user?.role || '—'}
+              </Text>
+            </View>
           </View>
-        ) : null}
-      </Card>
+        </View>
 
-      {/* ACCOUNT */}
-      <SectionLabel>Account</SectionLabel>
-      <Card variant="flat" style={styles.group}>
-        <Row
-          icon="person-outline"
-          label="Edit Profile"
-          sublabel="Update your name"
-          onPress={() => navigation.navigate('EditProfile')}
-        />
-        <Divider inset />
-        <Row
-          icon="lock-closed-outline"
-          label="Change Password"
-          sublabel="Keep your account secure"
-          onPress={() => navigation.navigate('ChangePassword')}
-        />
-      </Card>
+        {/* Shop card */}
+        {shop && (
+          <View style={styles.shopCard}>
+            <View style={styles.shopHeader}>
+              <Ionicons name="storefront-outline" size={18} color={colors.primary} />
+              <Text style={styles.shopLabel}>Your shop</Text>
+            </View>
+            <Text style={styles.shopName}>{shop.name}</Text>
+            {shop.mpesaNumber && (
+              <Text style={styles.shopMeta}>Pochi · {shop.mpesaNumber}</Text>
+            )}
+            {shop.stkEnabled && (
+              <View style={styles.stkBadge}>
+                <Ionicons name="flash" size={11} color={colors.success} />
+                <Text style={styles.stkBadgeText}>STK Push enabled</Text>
+              </View>
+            )}
+          </View>
+        )}
 
-      {/* SECURITY */}
-      <SectionLabel>Security</SectionLabel>
-      <Card variant="flat" style={styles.group}>
-        <Row
-          icon="log-out-outline"
-          label="Log Out"
-          sublabel="Sign out of this device"
-          onPress={handleLogout}
-          destructive
-        />
-      </Card>
+        {/* Shop settings — owner + manager */}
+        {isManager && (
+          <>
+            <Text style={styles.sectionLabel}>Shop</Text>
+            <View style={styles.card}>
+              <Row
+                icon="storefront-outline"
+                label="Shop details"
+                hint="Name, address, Pochi number"
+                onPress={() => navigation.navigate('ShopSettings')}
+              />
+              <Divider />
+              <Row
+                icon="flash-outline"
+                label="STK Push"
+                hint={shop?.stkEnabled ? 'Configured' : 'Not configured'}
+                onPress={() => navigation.navigate('PaymentSettings')}
+              />
+            </View>
+          </>
+        )}
 
-      <Text style={styles.version}>v1.0.0</Text>
-    </Screen>
+        {/* Team — owner only */}
+        {isOwner && (
+          <>
+            <Text style={styles.sectionLabel}>Team</Text>
+            <View style={styles.card}>
+              <Row
+                icon="people-outline"
+                label="Staff"
+                hint="Add, remove, manage roles"
+                onPress={() => navigation.navigate('Team')}
+              />
+            </View>
+          </>
+        )}
+
+        {/* Account */}
+        <Text style={styles.sectionLabel}>Account</Text>
+        <View style={styles.card}>
+          <Row
+            icon="person-outline"
+            label="Edit profile"
+            hint="Your name"
+            onPress={() => navigation.navigate('EditProfile')}
+          />
+          <Divider />
+          <Row
+            icon="lock-closed-outline"
+            label="Change password"
+            onPress={() => navigation.navigate('ChangePassword')}
+          />
+        </View>
+
+        {/* Sign out */}
+        <TouchableOpacity
+          style={styles.signOutBtn}
+          onPress={handleSignOut}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="log-out-outline" size={18} color={colors.danger} />
+          <Text style={styles.signOutText}>Sign out</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-function Row({ icon, label, sublabel, onPress, destructive }) {
+function Row({ icon, label, hint, onPress }) {
   return (
     <TouchableOpacity style={styles.row} onPress={onPress} activeOpacity={0.6}>
-      <View style={[styles.rowIcon, destructive && styles.rowIconDanger]}>
-        <Ionicons
-          name={icon}
-          size={20}
-          color={destructive ? colors.danger : colors.primary}
-        />
+      <View style={styles.rowIcon}>
+        <Ionicons name={icon} size={18} color={colors.textMuted} />
       </View>
       <View style={styles.rowBody}>
-        <Text style={[styles.rowLabel, destructive && { color: colors.danger }]}>
-          {label}
-        </Text>
-        {sublabel ? <Text style={styles.rowSublabel}>{sublabel}</Text> : null}
+        <Text style={styles.rowLabel}>{label}</Text>
+        {hint && <Text style={styles.rowHint}>{hint}</Text>}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+function Divider() {
+  return <View style={styles.divider} />;
+}
 
-  hero: {
-    alignItems: 'center',
-    marginBottom: spacing.xxl,
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.background },
+  scroll: {
+    padding: spacing.screenPadding,
+    paddingBottom: spacing.xxxl,
   },
-  avatarRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 3,
-    borderColor: colors.primarySoft,
+
+  userCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primarySoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: colors.textInverse,
-    fontSize: 30,
+    ...typography.h3,
+    color: colors.primary,
     fontWeight: '700',
-    letterSpacing: 0.5,
   },
-  name: {
-    ...typography.h2,
+  userInfo: { flex: 1 },
+  userName: {
+    ...typography.h3,
     color: colors.text,
-    textAlign: 'center',
   },
-  email: {
-    ...typography.body,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.pill,
-    marginTop: spacing.lg,
-    gap: 6,
-  },
-  pillText: {
-    ...typography.tiny,
-    color: colors.textMuted,
-  },
-
-  group: {
-    marginBottom: spacing.xxl,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-  },
-  rowIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  rowIconDanger: { backgroundColor: colors.dangerSoft },
-  rowBody: { flex: 1 },
-  rowLabel: { ...typography.bodyMedium, color: colors.text },
-  rowSublabel: {
+  userEmail: {
     ...typography.caption,
     color: colors.textMuted,
     marginTop: 2,
   },
+  rolePill: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
+    marginTop: spacing.xs,
+  },
+  rolePillText: {
+    ...typography.tiny,
+    color: colors.primary,
+    fontWeight: '700',
+  },
 
-  version: {
+  shopCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  shopHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  shopLabel: {
     ...typography.tiny,
     color: colors.textMuted,
-    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '700',
+  },
+  shopName: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  shopMeta: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
+  stkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.successSoft,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radii.pill,
     marginTop: spacing.sm,
+  },
+  stkBadgeText: {
+    ...typography.tiny,
+    color: colors.success,
+    fontWeight: '700',
+  },
+
+  sectionLabel: {
+    ...typography.caption,
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '700',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.xs,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+    ...shadows.sm,
+  },
+
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  rowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowBody: { flex: 1 },
+  rowLabel: {
+    ...typography.bodyMedium,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  rowHint: {
+    ...typography.tiny,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginLeft: spacing.lg + 32 + spacing.md,
+  },
+
+  signOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  signOutText: {
+    ...typography.bodyMedium,
+    color: colors.danger,
+    fontWeight: '600',
   },
 });

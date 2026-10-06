@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 
 import { useAuth } from '../../context/AuthContext';
+import { useShift } from '../../context/ShiftContext';
 import { colors, spacing, typography, radii, shadows } from '../../theme';
 
 const ROLE_LABELS = {
@@ -21,9 +22,14 @@ const ROLE_DESCRIPTIONS = {
 
 export default function ProfileScreen({ navigation }) {
   const { user, shop, isOwner, isManager, signOut } = useAuth();
+  const { checkOut } = useShift();
 
   const handleSignOut = async () => {
     try {
+      // Close any open shift first — the token is still valid here.
+      // After signOut, AuthContext clears the token and any backend
+      // call would 401.
+      await checkOut();
       await signOut();
     } catch (err) {
       Toast.show({ type: 'error', text1: 'Sign out failed', text2: err.message });
@@ -186,7 +192,7 @@ export default function ProfileScreen({ navigation }) {
         </TouchableOpacity>
 
         <Text style={styles.signOutHint}>
-          Signs you out and clears the current shift. The next person must log in with their own account.
+          Signs you out and closes any open shift. The next person must log in with their own account.
         </Text>
       </ScrollView>
     </SafeAreaView>

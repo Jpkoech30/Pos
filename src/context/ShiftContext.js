@@ -24,8 +24,6 @@ export function ShiftProvider({ children }) {
   const [staffCount, setStaffCount] = useState(0);
   const prevUserRef = useRef(null);
 
-  // Cold start — restore cached staff, and clear any stale lock key
-  // from an earlier version. The lock is in-memory only now.
   useEffect(() => {
     SecureStore.deleteItemAsync('shift_locked').catch(() => {});
 
@@ -46,7 +44,6 @@ export function ShiftProvider({ children }) {
     })();
   }, []);
 
-  // Whenever the user changes, refresh the shift from the backend.
   useEffect(() => {
     if (!user) {
       setCurrentShift(null);
@@ -88,10 +85,17 @@ export function ShiftProvider({ children }) {
     })();
   }, [user]);
 
-  // Clear everything when the user logs out
+  // On logout: local cleanup only. The caller should have already closed
+  // the shift via checkOut() while the token was valid. Any backend call
+  // from this path would 401 because AuthContext has already cleared the
+  // token by the time this effect fires.
   useEffect(() => {
     if (!user && prevUserRef.current) {
-      checkOut();
+      setCurrentShift(null);
+      setStaff(null);
+      setCurrentStaffId(null);
+      setIsLocked(false);
+      SecureStore.deleteItemAsync(KEY_STAFF).catch(() => {});
     }
     prevUserRef.current = user;
   }, [user]);
@@ -127,6 +131,9 @@ export function ShiftProvider({ children }) {
     return result;
   }, [currentShift]);
 
+  // Close the backend shift (if any) and clear local state. Call this
+  // while the auth token is still valid — e.g. from ProfileScreen's
+  // sign-out handler, or from the lock screen's sign-out escape hatch.
   const checkOut = useCallback(async () => {
     if (currentShift) {
       try {
@@ -142,7 +149,6 @@ export function ShiftProvider({ children }) {
     await SecureStore.deleteItemAsync(KEY_STAFF);
   }, [currentShift]);
 
-  // Lock is in-memory only. Force-closing the app clears it.
   const lock = useCallback(() => {
     if (!staff) return;
     setIsLocked(true);

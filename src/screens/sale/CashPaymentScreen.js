@@ -9,6 +9,7 @@ import Toast from 'react-native-toast-message';
 
 import { useCart } from '../../context/CartContext';
 import { ordersApi } from '../../services/orders';
+import { newIdempotencyKey } from '../../utils/idempotency';
 import { colors, spacing, typography, radii } from '../../theme';
 
 const DENOMS = [50, 100, 200, 500, 1000];
@@ -17,6 +18,7 @@ export default function CashPaymentScreen({ navigation }) {
   const { items, total, clearCart } = useCart();
   const [notes, setNotes] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [idempotencyKey] = useState(() => newIdempotencyKey());
 
   const effective = notes.reduce((s, n) => s + n, 0);
   const change = effective - total;
@@ -41,7 +43,11 @@ export default function CashPaymentScreen({ navigation }) {
           quantity: i.quantity,
         })),
         'cash',
-        { amountTendered: effective, changeGiven: Math.max(change, 0) },
+        {
+          amountTendered: effective,
+          changeGiven: Math.max(change, 0),
+          idempotencyKey,
+        },
       );
       clearCart();
       navigation.replace('Receipt', { order: data.order });
@@ -72,7 +78,6 @@ export default function CashPaymentScreen({ navigation }) {
           <Text style={[styles.label, styles.labelSpacer]}>Received</Text>
           <Text style={styles.received}>KSh {effective.toFixed(2)}</Text>
 
-          {/* Chips of counted notes */}
           {notes.length > 0 && (
             <View style={styles.chipsRow}>
               {notes.map((n, i) => (
@@ -89,7 +94,6 @@ export default function CashPaymentScreen({ navigation }) {
             </View>
           )}
 
-          {/* Denom buttons */}
           <View style={styles.denomRow}>
             {DENOMS.map((d) => (
               <TouchableOpacity

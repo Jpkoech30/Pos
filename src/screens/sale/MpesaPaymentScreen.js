@@ -9,6 +9,7 @@ import Toast from 'react-native-toast-message';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { ordersApi } from '../../services/orders';
+import { newIdempotencyKey } from '../../utils/idempotency';
 import { formatKsh } from '../../utils/format';
 import { colors, spacing, typography, radii } from '../../theme';
 
@@ -16,6 +17,7 @@ export default function MpesaPaymentScreen({ navigation }) {
   const { items, total, clearCart } = useCart();
   const { shop } = useAuth();
   const [submitting, setSubmitting] = useState(false);
+  const [idempotencyKey] = useState(() => newIdempotencyKey());
 
   const pochiNumber = shop?.mpesaNumber || null;
 
@@ -31,7 +33,10 @@ export default function MpesaPaymentScreen({ navigation }) {
           quantity: i.quantity,
         })),
         'mpesa',
-        { mpesaPhone: pochiNumber ? pochiNumber.replace(/\s/g, '') : null },
+        {
+          mpesaPhone: pochiNumber ? pochiNumber.replace(/\s/g, '') : null,
+          idempotencyKey,
+        },
       );
       clearCart();
       navigation.replace('Receipt', { order: data.order });
@@ -41,7 +46,6 @@ export default function MpesaPaymentScreen({ navigation }) {
     }
   };
 
-  // No Pochi number configured on this shop
   if (!pochiNumber) {
     return (
       <SafeAreaView style={styles.root} edges={['bottom']}>

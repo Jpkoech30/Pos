@@ -10,6 +10,7 @@ import Toast from 'react-native-toast-message';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { mpesaApi } from '../../services/mpesa';
+import { newIdempotencyKey } from '../../utils/idempotency';
 import { colors, spacing, typography, radii } from '../../theme';
 
 const POLL_INTERVAL = 2000;
@@ -25,12 +26,17 @@ export default function StkPushScreen({ navigation }) {
   const [orderId, setOrderId] = useState(null);
   const [result, setResult] = useState(null);
 
+  // One key per attempt. Reused on every retry of Send. Reset by Try Again.
+  const keyRef = useRef(null);
+  if (keyRef.current === null) {
+    keyRef.current = newIdempotencyKey();
+  }
+
   const pollRef = useRef(null);
   const timeoutRef = useRef(null);
 
   const stkEnabled = shop?.stkEnabled === true;
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -38,7 +44,6 @@ export default function StkPushScreen({ navigation }) {
     };
   }, []);
 
-  // Re-poll when the app is focused after being backgrounded
   useEffect(() => {
     const unsub = navigation.addListener('focus', async () => {
       if (phase === 'waiting' && orderId) {
@@ -73,8 +78,6 @@ export default function StkPushScreen({ navigation }) {
       try {
         const elapsed = Date.now() - startedAt;
 
-        // After 30 seconds of pending, ask Safaricom directly once.
-        // This catches the case where the callback never arrived.
         if (elapsed > QUERY_AFTER_MS && !queried) {
           queried = true;
           try {
@@ -125,6 +128,7 @@ export default function StkPushScreen({ navigation }) {
           price: i.price,
           quantity: i.quantity,
         })),
+        idempotencyKey: keyRef.current,
       });
       setOrderId(data.orderId);
       startPolling(data.orderId);
@@ -152,12 +156,13 @@ export default function StkPushScreen({ navigation }) {
   };
 
   const handleTryAgain = () => {
+    // Fresh attempt — new key so the backend treats this as a new order.
+    keyRef.current = newIdempotencyKey();
     setPhase('input');
     setResult(null);
     setOrderId(null);
   };
 
-  // ─── Not configured ───
   if (!stkEnabled && phase === 'input') {
     return (
       <SafeAreaView style={styles.root} edges={['bottom']}>
@@ -184,7 +189,6 @@ export default function StkPushScreen({ navigation }) {
     );
   }
 
-  // ─── Waiting ───
   if (phase === 'waiting') {
     return (
       <SafeAreaView style={styles.root} edges={['bottom']}>
@@ -210,7 +214,6 @@ export default function StkPushScreen({ navigation }) {
     );
   }
 
-  // ─── Done ───
   if (phase === 'done') {
     const success = result?.paymentStatus === 'completed';
     return (
@@ -266,7 +269,6 @@ export default function StkPushScreen({ navigation }) {
     );
   }
 
-  // ─── Input ───
   const validPhone = /^(254|0|\+254)?[17]\d{8}$/.test(phone.replace(/\s/g, ''));
 
   return (
